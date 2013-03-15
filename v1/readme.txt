@@ -1,1 +1,1 @@
-Needs a few perl dependencies that don't work quite right.
+Requires Lingua::EN::Tagger
