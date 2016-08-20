@@ -1,3 +1,5 @@
+v1 is a Perl script written in 2005:
+
 I. When a TAG button is pressed
 
 1. Accept any amount of text from a field called INPUT. Perform a part-of-speech tagging and display the tagged words in a text field called TAGGED OUTPUT. The value of the TAGGED OUTPUT field might look/NN something/NN like/IN this/DET ./PP
@@ -11,3 +13,7 @@ II. When a GENERATE button is pressed
 2. Substitute each of the words or punctuation marks in the TAGGED OUTPUT field with a different word or punctuation mark from the corresponding POS field unless that word is in the range specified by the COMMON value in which case it is not substituted. Display the result in a SUBSTITUTION text field.
 
 3. Capitalize any letter directly following the PP, Punctuation, Sentence Ender tag then remove the POS tags from the SUBSTITUTION text. Display the new text in a field called RECOMBINED.
+
+v2: an incomplete PHP version written in 2010
+
+js: a node.js version with most functionality written in 2016
