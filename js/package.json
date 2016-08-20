@@ -1,0 +1,30 @@
+{
+  "name": "open-wound",
+  "version": "2.5.0",
+  "description": "Javascript implementation of an old Perl script",
+  "main": "main.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/mbutler/openwound.git"
+  },
+  "keywords": [
+    "parts-of-speech",
+    "writing",
+    "madlibs"
+  ],
+  "author": "Matthew Butler",
+  "license": "MIT",
+  "bugs": {
+    "url": "https://github.com/mbutler/openwound/issues"
+  },
+  "homepage": "https://github.com/mbutler/openwound#readme",
+  "dependencies": {
+    "forms": "^1.1.4",
+    "fs": "0.0.2",
+    "lodash": "^4.15.0",
+    "pos": "^0.3.0"
+  }
+}
