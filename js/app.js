@@ -108,16 +108,13 @@ function checkSimilarity(model, name) {
 
 //returns the parts-of-speech tag for a single word
 function tag(word) {
-	var token = lexer.lex(word);
-	var taggedWord = tagger.tag(token);
+	var token = lexer.lex(word),
+	    taggedWord = tagger.tag(token),
+	    taggedToken = taggedWord[0],
+	    word = taggedToken[0],
+	    tag = taggedToken[1]
 
-	for (i in taggedWord) {
-	    var taggedToken = taggedWord[i];
-	    var word = taggedToken[0];
-	    var tag = taggedToken[1];
-	    //console.log(word + " /" + tag);
-	    return tag;
-	}
+	return tag;
 }
 
 //tags a length of text. [word, tag] array pushed to a list
