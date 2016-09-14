@@ -66,13 +66,11 @@ w2v.loadModel( './data/glove.6B.50d.txt', function(err, model){
 	//loop through the array of word/tag arrays
 	_.forEach(taggedText, function(set) {		
 		var originalWord = set[0];
-		var originalTag = set[1];
-		var similarWordList = [];
+		var originalTag = set[1];		
 		var replacementWord = originalWord;
 		var similarTag = '';
 		var similarSet = [];
-		var reindex = 0;
-		var n = 0;
+		var reindex = 0;		
 
 		//get an array of 10 {word:, dist:} objects that are similar to the original word
 		var similarityArray = checkSimilarity(model, originalWord);
@@ -131,8 +129,7 @@ function checkSimilarity(model, name) {
 function tag(word) {
 	var token = lexer.lex(word),
 	    taggedWord = tagger.tag(token),
-	    taggedToken = taggedWord[0],
-	    word = taggedToken[0],
+	    taggedToken = taggedWord[0],	    
 	    tag = taggedToken[1]
 
 	return tag;
@@ -144,6 +141,7 @@ function tagOriginal(text) {
 	var list = lexer.lex(text);
 	var taggedWords = tagger.tag(list);
 	var taggedList = [];
+    var i;
 
 	for (i in taggedWords) {
 		var taggedWord = taggedWords[i];
