@@ -1,12 +1,12 @@
 Openwound is a (re)writing tool named after the famous William S. Burroughs quote about cut-up writing being divination. "When you cut into the present the future leaks out."
 
-This project started in 2002 with the publication of the book (Alloy: Kind Tricks and Bodily Realities in the Vanguard Party)[https://books.google.com/books/about/Alloy.html?id=AelIAAAACAAJ] that I created for my MFA in Intermedia Art from the University of Iowa.
+This project started in 2002 with the publication of the book [Alloy: Kind Tricks and Bodily Realities in the Vanguard Party](https://books.google.com/books/about/Alloy.html?id=AelIAAAACAAJ) that I created for my MFA in Intermedia Art from the University of Iowa.
 
-(read more)[http://mbutler.org/projects/alloy-kind-tricks-and-bodily-realities-in-the-vanguard-party]
+[read more](http://mbutler.org/projects/alloy-kind-tricks-and-bodily-realities-in-the-vanguard-party)
 
 `npm install`
 
-Starting with an input text in /data, run `node app` and Openwound will use the parts-of-speech of input.txt as a skeletal framework to add new words with the same parts-of-speech. New words are chosen using the (Word2Vec)[https://en.wikipedia.org/wiki/Word2vec] similarity function.
+Starting with an input text in /data, run `node app` and Openwound will use the parts-of-speech of input.txt as a skeletal framework to add new words with the same parts-of-speech. New words are chosen using the [Word2Vec](https://en.wikipedia.org/wiki/Word2vec) similarity function.
 
 
 =====Deprecated======
