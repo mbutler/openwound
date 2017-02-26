@@ -1,12 +1,28 @@
+# Openwound
+
 Openwound is a (re)writing tool named after the famous William S. Burroughs quote about cut-up writing being divination. "When you cut into the present the future leaks out."
 
-This project started in 2002 with the publication of the book [Alloy: Kind Tricks and Bodily Realities in the Vanguard Party](https://books.google.com/books/about/Alloy.html?id=AelIAAAACAAJ) that I created for my MFA in Intermedia Art from the University of Iowa.
+This project started in 2002 with the publication of the book [Alloy: Kind Tricks and Bodily Realities in the Vanguard Party](https://books.google.com/books/about/Alloy.html?id=AelIAAAACAAJ) that I created for my MFA in Intermedia Art from the University of Iowa. [Read more](http://mbutler.org/projects/alloy-kind-tricks-and-bodily-realities-in-the-vanguard-party). I originally used a DOS program called [Babble](https://archive.org/details/Babble_1020), before writing a parts-of-speech based program in Perl in 2005. After an aborted PHP version in 2009, I wrote this Word2Vec + parts-of-speech based version in js in 2016.
 
-[read more](http://mbutler.org/projects/alloy-kind-tricks-and-bodily-realities-in-the-vanguard-party)
+
+
+---
+
+# Installation
+
+The pre-trained word vector data needed for the Word2Vec module is not distributed with this project. It's an 822 MB download. For information on the _Wikipedia 2014 + Gigaword 5 GloVe_ set, visit the [Stanford Natural Language Processing Group glove page](http://nlp.stanford.edu/projects/glove/). Download it directly [here](http://nlp.stanford.edu/data/glove.6B.zip).
+
+You'll probably want the *glove.6B.50d.txt* file, though you can experiment with the larger sets if you like. Place the *glove.6B.50d.txt* file in the /data directory.
+
+Next, you'll need to prepend the appropriate number of words and the length of the vector to the file. Navigate to the data directory and run the following command:
+
+`sed -i '1s/^/400000 50\n\n/' glove.6B.50d.txt`
+
+Now you are ready to download modules and install. 
 
 `npm install`
 
-Starting with an input text in /data, run `node app` and Openwound will use the parts-of-speech of input.txt as a skeletal framework to add new words with the same parts-of-speech. New words are chosen using the [Word2Vec](https://en.wikipedia.org/wiki/Word2vec) similarity function.
+Starting with an input text file in /data, run `node app` and Openwound will use the parts-of-speech of input.txt as a skeletal framework to add new words with the same parts-of-speech. New words are chosen using the [Word2Vec](https://en.wikipedia.org/wiki/Word2vec) similarity function.
 
 #Sample:
 
