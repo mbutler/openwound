@@ -2,7 +2,7 @@
 
 Openwound is a (re)writing tool named after the famous William S. Burroughs quote about cut-up writing being divination. "When you cut into the present the future leaks out."
 
-This project started in 2002 with the publication of the book [Alloy: Kind Tricks and Bodily Realities in the Vanguard Party](https://books.google.com/books/about/Alloy.html?id=AelIAAAACAAJ) that I created for my MFA in Intermedia Art from the University of Iowa. [Read more](http://mbutler.org/projects/alloy-kind-tricks-and-bodily-realities-in-the-vanguard-party). I originally used a DOS program called [Babble](https://archive.org/details/Babble_1020), before writing a parts-of-speech based program in Perl in 2005. After an aborted PHP version in 2009, I wrote this Word2Vec + parts-of-speech based version in js in 2016.
+This project started in 2002 with the publication of the book [Alloy: Kind Tricks and Bodily Realities in the Vanguard Party](https://books.google.com/books/about/Alloy.html?id=AelIAAAACAAJ) that I created for my MFA in Intermedia Art from the University of Iowa. [Read more](http://mbutler.org/projects/alloy-kind-tricks-and-bodily-realities-in-the-vanguard-party). I originally used a DOS program called [Babble](https://archive.org/details/Babble_1020), before writing a parts-of-speech based program in Perl in 2005. After an aborted PHP version in 2009, I wrote this word vectors + parts-of-speech based version for node.js in 2016.
 
 
 
