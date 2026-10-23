@@ -39,11 +39,11 @@
     },
     "tinystories/config.yaml": {
       "bytes": 2483,
-      "sha256": null
+      "sha256": "4009baccad5a159bfc12cd48f3da17c22c4a281b86f71f2fc70b7c1bbb62004b"
     },
     "tinystories/README.md": {
       "bytes": 255,
-      "sha256": null
+      "sha256": "839b503fff0bbc3ef789c51d53fd77a269ad8c302bc4ae68c4dff65e70930d8b"
     }
   }
 }

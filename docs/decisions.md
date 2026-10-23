@@ -23,3 +23,9 @@ The specification's preparation environment was PyTorch 2.14.1+cpu. This machine
 The package version is `4.0.0.dev0`. In the specification, "version 1" means the first complete studio release. That release is still openwound v4.
 
 Adapter error codes `INPUT_EMPTY`, `INVALID_SAMPLING`, and `PROFILE_MISMATCH` name failures the HTTP list had not yet spelled out. They use the same envelope idea: a code, a readable message, and details.
+
+## 2026-10-23 Checkpoint smoke
+
+`huggingface_hub` 2.3.0 downloaded the pinned TinyStories revision into `.model-cache`, which is not committed. SHA-256 values for `config.yaml` and `README.md` were computed from those files and then written into the profile. The four hashes supplied by the specification matched.
+
+`python -m ncm_art.cli smoke` loaded the tokenizer checkpoint before constructing the generator, encoded "Anna borrowed a red kite from Ben." (8 BPE tokens), reconstructed all twelve levels, and branched at retained counts 0, 3, and 12. Two retained-3 variations used base seed 42 and candidate seed 1. Retaining all twelve levels made no generator calls and returned the source codes. The final reconstruction is not the source sentence. The outputs were not edited. The record is `fixtures/recorded/tinystories-cpu-fp32-eager-v1.json`.
