@@ -1,8 +1,10 @@
 """Project-scoped work, influence, preview, and commit routes."""
 
+from fastapi.responses import JSONResponse
 from pydantic import BaseModel
 
 from ncm_art.storage.errors import ProjectError
+
 from ncm_art.works.service import (
     bind_influence,
     commit_prepared_application,
@@ -17,6 +19,7 @@ from ncm_art.works.service import (
     preview_protected_insert,
     preview_return,
     preview_transfer,
+    queue_omission_repair,
     reject_preview,
     remove_entry,
     reorder_entries,
@@ -111,6 +114,23 @@ class RetargetBody(BaseModel):
 
 class CandidateBody(BaseModel):
     text: str
+    release_protection: bool = False
+
+
+class DestinationBody(BaseModel):
+    kind: str
+    position: int | None = None
+    entry_id: str | None = None
+    expected_revision_id: str | None = None
+
+
+class RepairBody(BaseModel):
+    client_request_id: str
+    passage_revision_id: str
+    omission: MarkBody
+    context: MarkBody
+    destination: DestinationBody
+    candidate_count: int = 3
     release_protection: bool = False
 
 
@@ -246,6 +266,22 @@ def register(application, library) -> None:
             body.candidate_id,
             body.expected_work_state_version,
         )
+
+    @application.post("/api/v1/projects/{project_id}/works/{work_id}/repairs")
+    def repair(project_id: str, work_id: str, body: RepairBody):
+        job = queue_omission_repair(
+            project_for(project_id),
+            library.root,
+            work_id,
+            body.passage_revision_id,
+            body.omission.model_dump(),
+            body.context.model_dump(),
+            body.destination.model_dump(),
+            body.client_request_id,
+            body.candidate_count,
+            body.release_protection,
+        )
+        return JSONResponse(status_code=202, content=job)
 
     @application.post("/api/v1/projects/{project_id}/works/{work_id}/held-names/{held_id}/return")
     def returning(project_id: str, work_id: str, held_id: str, body: ReturnBody):

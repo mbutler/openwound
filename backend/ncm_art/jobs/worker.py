@@ -38,9 +38,12 @@ def write_capabilities(root: Path, state: str, message: str | None = None, *, ca
 
 
 def read_capabilities(library: Library) -> dict:
+    from ncm_art.providers.instruction import capability
+
     unknown = {
         "ncm": {"profile": CAPABILITY_PROFILE, "state": "unknown", "message": None},
         "embedding": {"profile": "minilm-l6-v2", "state": "unknown", "message": None},
+        "instruction": capability(library.root),
     }
     if worker_liveness(library) == "stopped":
         return unknown
@@ -56,6 +59,7 @@ def read_capabilities(library: Library) -> dict:
     if not isinstance(payload, dict) or "ncm" not in payload:
         return unknown
     payload.setdefault("embedding", {"profile": "minilm-l6-v2", "state": "unloaded", "message": None})
+    payload["instruction"] = capability(library.root)
     return payload
 
 
@@ -64,6 +68,16 @@ def dispatch_job(project, job: dict, load_ncm, library_root=None) -> None:
         from ncm_art.retrieval.embed_job import execute_embed
 
         execute_embed(project, job, library_root)
+        return
+    if job["operation"] == "omit_repair":
+        from ncm_art.providers.repair_job import execute_repair
+
+        try:
+            execute_repair(project, job, library_root)
+        except ProjectError as error:
+            project.fail(job["id"], error.code, error.message, error.details)
+        except Exception as error:
+            project.fail(job["id"], "JOB_FAILED", str(error))
         return
     try:
         project.ensure_current()

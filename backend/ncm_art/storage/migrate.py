@@ -15,7 +15,7 @@ from ncm_art import __version__
 from ncm_art.model_adapter.profile import CODEBOOK_SIZE, LEVELS
 from ncm_art.storage.errors import ProjectError
 
-SCHEMA_VERSION = 4
+SCHEMA_VERSION = 5
 BASELINE_VERSION = 1
 
 REPRESENTATION_TABLE = """
@@ -383,6 +383,33 @@ CREATE TABLE protected_range (
 );
 """
 
+COMPARISON_DDL = """
+CREATE TABLE code_comparison (
+    id TEXT PRIMARY KEY,
+    query_representation_id TEXT NOT NULL,
+    metric_id TEXT NOT NULL,
+    prefix_count INTEGER NOT NULL,
+    band_policy TEXT NOT NULL,
+    band_index INTEGER,
+    snapshot_json TEXT NOT NULL,
+    baseline_state TEXT NOT NULL,
+    baseline_value REAL,
+    created_at TEXT NOT NULL,
+    FOREIGN KEY (query_representation_id) REFERENCES representation(id)
+);
+CREATE TABLE code_comparison_pair (
+    id TEXT PRIMARY KEY,
+    comparison_id TEXT NOT NULL,
+    other_representation_id TEXT NOT NULL,
+    agreement REAL NOT NULL,
+    adjusted REAL,
+    shared_prefix INTEGER NOT NULL CHECK (shared_prefix IN (0, 1)),
+    same_band INTEGER NOT NULL CHECK (same_band IN (0, 1)),
+    FOREIGN KEY (comparison_id) REFERENCES code_comparison(id),
+    FOREIGN KEY (other_representation_id) REFERENCES representation(id)
+);
+"""
+
 
 def current_schema_script() -> str:
     return (
@@ -391,6 +418,7 @@ def current_schema_script() -> str:
         + REPRESENTATION_INDEX
         + CORRESPONDENCE_DDL
         + WORK_DDL
+        + COMPARISON_DDL
         + f"INSERT INTO meta(key, value) VALUES ('schema_version', '{SCHEMA_VERSION}');\n"
     )
 
@@ -526,6 +554,8 @@ def _apply_migration(conn: sqlite3.Connection, version: int) -> None:
         _migrate_2_to_3(conn)
     elif version == 3:
         _migrate_3_to_4(conn)
+    elif version == 4:
+        _migrate_4_to_5(conn)
     else:
         raise ProjectError(
             "MIGRATION_FAILED",
@@ -546,6 +576,11 @@ def _migrate_2_to_3(conn: sqlite3.Connection) -> None:
 
 def _migrate_3_to_4(conn: sqlite3.Connection) -> None:
     for statement in _sql_statements(WORK_DDL):
+        conn.execute(statement)
+
+
+def _migrate_4_to_5(conn: sqlite3.Connection) -> None:
+    for statement in _sql_statements(COMPARISON_DDL):
         conn.execute(statement)
 
 

@@ -344,6 +344,7 @@ def apply_graft(
 
     grafted = base_codes.detach().clone()
     records = []
+    seen: set[tuple[int, int]] = set()
     for level_index, position in positions:
         if isinstance(level_index, bool) or not isinstance(level_index, int):
             raise AdapterError("INVALID_CODE_INDEX", "A graft level must be an integer.")
@@ -366,6 +367,13 @@ def apply_graft(
                 "INVALID_CODE_INDEX",
                 f"Position {position} is outside level {level_index}, which has length {width}.",
             )
+        if (level_index, position) in seen:
+            raise AdapterError(
+                "INVALID_CODE_INDEX",
+                "That code position is already in this graft.",
+                {"level_index": level_index, "position": position},
+            )
+        seen.add((level_index, position))
         offset = sum(levels[:level_index]) + position
         original = int(grafted[0, offset])
         replacement = int(donor_codes[0, offset])

@@ -18,12 +18,14 @@ from ncm_art.influences.preset import (
     conflicting_protection,
     validate_definition,
 )
+from ncm_art.operations.omission import GAP_MARKER, PROMPT_VERSION, assemble_repair, provider_window
 from ncm_art.operations.text import assemble, overlaps, plan_protections, splice
 from ncm_art.storage.errors import ProjectError
 
 TRANSFER = "transfer_fragment_v1"
 PROTECTED = "protected_insert_v1"
 RETURN = "return_held_name_v1"
+REPAIR = "omit_and_repair_v1"
 OPERATION_VERSION = "1"
 
 STALE = "The work changed after this preview. Prepare it again. The current work was kept."
@@ -703,6 +705,137 @@ def get_preview(project, preview_id: str) -> dict:
         return _preview_payload(project, conn, _preview_row(conn, preview_id))
 
 
+def queue_omission_repair(
+    project,
+    library_root,
+    work_id: str,
+    passage_revision_id: str,
+    omission: dict,
+    context: dict,
+    destination: dict,
+    client_request_id: str,
+    candidate_count: int = 3,
+    release_protection: bool = False,
+) -> dict:
+    """Validate the span, then queue a provider job. The work stays unchanged."""
+    from ncm_art.providers.instruction import load_profile
+
+    profile = load_profile(library_root)
+    if profile is None:
+        raise ProjectError(
+            "CAPABILITY_UNAVAILABLE",
+            "No instruction provider is configured. Import, transfer, and returning a name still work.",
+            status=503,
+        )
+    if isinstance(candidate_count, bool) or not isinstance(candidate_count, int) or not 1 <= candidate_count <= 8:
+        raise ProjectError("INVALID_TEXT", "Ask for one to eight repairs.", {"candidate_count": candidate_count})
+    omission_start = _whole(omission.get("start_byte"), "The omission is not a byte offset.")
+    omission_end = _whole(omission.get("end_byte"), "The omission is not a byte offset.")
+    context_start = _whole(context.get("start_byte"), "The context window is not a byte offset.")
+    context_end = _whole(context.get("end_byte"), "The context window is not a byte offset.")
+    with project.immediate_transaction() as conn:
+        work = _lock_work(conn, work_id)
+        raw, _source = _revision_bytes(conn, project, passage_revision_id)
+        if omission_start >= omission_end:
+            raise ProjectError("INVALID_SPAN", "Mark a nonempty omission.")
+        provider_window(raw, context_start, context_end, omission_start, omission_end)
+        if not release_protection:
+            for protection in _protection_rows(conn, passage_revision_id):
+                if overlaps(omission_start, omission_end, protection["start_byte"], protection["end_byte"]):
+                    raise ProjectError(
+                        "PROTECTED_RANGE",
+                        "That omission would change a protected passage. Release the protection to continue.",
+                        status=409,
+                    )
+        binding = _active_binding(conn, work)
+        chosen = _repair_destination(conn, work_id, destination, passage_revision_id)
+        recipe = {
+            "work_id": work_id,
+            "passage_revision_id": passage_revision_id,
+            "omission": {"start_byte": omission_start, "end_byte": omission_end},
+            "context": {"start_byte": context_start, "end_byte": context_end},
+            "destination": chosen,
+            "candidate_count": candidate_count,
+            "release_protection": bool(release_protection),
+            "expected_work_state_version": work["state_version"],
+            "binding_id": None if binding is None else binding["id"],
+            "influence_version_id": None if binding is None else binding["influence_version_id"],
+            "prompt_version": PROMPT_VERSION,
+            "gap_marker": GAP_MARKER,
+        }
+    return project.submit_job("omit_repair", recipe, client_request_id)
+
+
+def record_repair_candidate(project, recipe: dict, replacement: str, provider_call: dict) -> str:
+    """Store one prepared repair. The name rule does not apply, and the work version stays put."""
+    now = _now()
+    with project.immediate_transaction() as conn:
+        work = _lock_work(conn, recipe["work_id"])
+        raw, source_id = _revision_bytes(conn, project, recipe["passage_revision_id"])
+        omission = recipe["omission"]
+        context = recipe["context"]
+        window = provider_window(
+            raw,
+            context["start_byte"],
+            context["end_byte"],
+            omission["start_byte"],
+            omission["end_byte"],
+        )
+        replacement_bytes = replacement.encode("utf-8")
+        final = assemble_repair(raw, omission["start_byte"], omission["end_byte"], replacement_bytes)
+        protections = _protection_rows(conn, recipe["passage_revision_id"])
+        if not recipe["release_protection"]:
+            for protection in protections:
+                if overlaps(omission["start_byte"], omission["end_byte"], protection["start_byte"], protection["end_byte"]):
+                    raise ProjectError(
+                        "PROTECTED_RANGE",
+                        "That omission would change a protected passage. Release the protection to continue.",
+                        status=409,
+                    )
+        carried = plan_protections(raw, final, protections, bool(recipe["release_protection"]))
+        base_id = _insert_candidate(project, conn, raw.decode("utf-8"), source_id, now)
+        final_id = _insert_candidate(project, conn, final.decode("utf-8"), source_id, now)
+        _insert_protections(conn, final_id, carried, now)
+        binding = None
+        if recipe.get("binding_id"):
+            binding = {"id": recipe["binding_id"], "influence_version_id": recipe.get("influence_version_id")}
+        omitted = raw[omission["start_byte"] : omission["end_byte"]].decode("utf-8")
+        return _insert_preview(
+            conn,
+            work=work,
+            binding=binding,
+            operation=REPAIR,
+            request={
+                "passage_revision_id": recipe["passage_revision_id"],
+                "omission": omission,
+                "context": context,
+                "omitted_text": omitted,
+                "provider_window": window.decode("utf-8"),
+                "replacement_text": replacement,
+                "prompt_version": recipe.get("prompt_version"),
+                "provider_call": provider_call,
+                "release_protection": bool(recipe["release_protection"]),
+                "position": recipe["destination"].get("position"),
+                "entry_count": _active_count(conn, work["id"]) if recipe["destination"]["kind"] == "insert_entry" else None,
+            },
+            base_id=base_id,
+            final_id=final_id,
+            destination=recipe["destination"],
+            effects=[
+                {
+                    "kind": "omission_repair",
+                    "start_byte": omission["start_byte"],
+                    "end_byte": omission["end_byte"],
+                    "replacement_start": omission["start_byte"],
+                    "replacement_end": omission["start_byte"] + len(replacement_bytes),
+                    "replacement_text": replacement,
+                }
+            ],
+            now=now,
+            state_version=recipe["expected_work_state_version"],
+        )
+
+
 def commit_prepared_application(
     project,
     project_id: str,
@@ -767,6 +900,10 @@ def _commit_new(project, conn, work_id, client_request_id, preview_id, candidate
     elif preview["operation"] == RETURN:
         entry_id, held_ids, event_id = _commit_return(
             project, conn, work, preview, request, effects, destination, final, receipt_id, now
+        )
+    elif preview["operation"] == REPAIR:
+        entry_id, held_ids, event_id = _commit_repair(
+            project, conn, work, preview, request, effects, destination, receipt_id, now
         )
     else:
         raise ProjectError("UNSUPPORTED_TEMPLATE", "That operation is not available.")
@@ -997,6 +1134,107 @@ def _commit_return(project, conn, work, preview, request, effects, destination, 
     return entry["id"], [held["id"]], event_id
 
 
+def _commit_repair(project, conn, work, preview, request, effects, destination, receipt_id, now):
+    if any(effect["kind"] == "held_name" for effect in effects):
+        raise ProjectError("RULE_CONFLICT", "A repair does not withhold a name.", status=409)
+    effect = next(item for item in effects if item["kind"] == "omission_repair")
+    if destination["kind"] == "insert_entry":
+        if request.get("entry_count") != _active_count(conn, work["id"]):
+            raise ProjectError("STALE_PREVIEW", STALE, status=409)
+        position = destination["position"]
+        conn.execute(
+            """UPDATE work_entry SET ordinal=ordinal+1
+               WHERE work_id=? AND removed_at IS NULL AND ordinal>=?""",
+            (work["id"], position),
+        )
+        entry_id = _new_id()
+        conn.execute(
+            """INSERT INTO work_entry(id, work_id, ordinal, passage_revision_id, removed_at)
+               VALUES (?, ?, ?, ?, NULL)""",
+            (entry_id, work["id"], position, preview["final_revision_id"]),
+        )
+    elif destination["kind"] == "replace_entry":
+        entry = _live_entry(conn, work["id"], destination["entry_id"])
+        if entry["passage_revision_id"] != destination["expected_revision_id"]:
+            raise ProjectError("STALE_TARGET", STALE_ENTRY, status=409)
+        _require_ranges(conn, project, preview["final_revision_id"])
+        old_revision = entry["passage_revision_id"]
+        conn.execute(
+            "UPDATE work_entry SET passage_revision_id=? WHERE id=?",
+            (preview["final_revision_id"], entry["id"]),
+        )
+        _rebase_held_names(
+            conn,
+            entry["id"],
+            old_revision,
+            preview["final_revision_id"],
+            effect["start_byte"],
+            effect["end_byte"],
+            effect["replacement_end"] - effect["replacement_start"] - (effect["end_byte"] - effect["start_byte"]),
+            now,
+        )
+        entry_id = entry["id"]
+    else:
+        raise ProjectError("INVALID_DESTINATION", "Choose whether the repair replaces an entry or is added to the work.")
+    event_id = _event(
+        conn,
+        work["id"],
+        "repair",
+        work["state_version"],
+        work["state_version"] + 1,
+        {
+            "operation": REPAIR,
+            "entry_id": entry_id,
+            "revision_id": preview["final_revision_id"],
+            "base_revision_id": preview["base_revision_id"],
+            "passage_revision_id": request["passage_revision_id"],
+            "omitted_text": request.get("omitted_text"),
+            "replacement_text": effect["replacement_text"],
+            "provider_window": request.get("provider_window"),
+        },
+        now,
+        preview_id=preview["id"],
+        receipt_id=receipt_id,
+    )
+    _derive(
+        project,
+        conn,
+        preview["final_revision_id"],
+        request,
+        REPAIR,
+        now,
+        [(request["passage_revision_id"], "repaired_from")],
+    )
+    return entry_id, [], event_id
+
+
+def _repair_destination(conn, work_id: str, destination: dict, passage_revision_id: str) -> dict:
+    kind = destination.get("kind") if isinstance(destination, dict) else None
+    if kind == "insert_entry":
+        position = _check_position(conn, work_id, destination.get("position"))
+        return {
+            "kind": "insert_entry",
+            "position": position,
+            "entry_id": None,
+            "expected_revision_id": None,
+            "label": "Adopt repair",
+        }
+    if kind == "replace_entry":
+        entry = _live_entry(conn, work_id, destination.get("entry_id"))
+        if destination.get("expected_revision_id") != entry["passage_revision_id"]:
+            raise ProjectError("STALE_TARGET", STALE_ENTRY, status=409)
+        if passage_revision_id != entry["passage_revision_id"]:
+            raise ProjectError("INVALID_DESTINATION", "A repair of this entry has to start from its current passage.")
+        return {
+            "kind": "replace_entry",
+            "position": None,
+            "entry_id": entry["id"],
+            "expected_revision_id": entry["passage_revision_id"],
+            "label": "Adopt repair",
+        }
+    raise ProjectError("INVALID_DESTINATION", "Choose whether the repair replaces an entry or is added to the work.")
+
+
 def _governed_transfer(donor: bytes, marked: dict | None, binding: dict | None):
     if binding is None:
         return donor, [], None
@@ -1135,6 +1373,11 @@ def _require_effect_bytes(final: bytes, effects: list[dict]) -> None:
             start = effect["target_start"]
             if final[start : start + len(name)] != name:
                 raise ProjectError("SPAN_MISMATCH", "The returned name is not in this candidate.", status=409)
+        if effect["kind"] == "omission_repair":
+            replacement = effect["replacement_text"].encode("utf-8")
+            start = effect["replacement_start"]
+            if final[start : start + len(replacement)] != replacement:
+                raise ProjectError("SPAN_MISMATCH", "The repair is not in this candidate.", status=409)
 
 
 def _require_saved_inputs(project, conn, request: dict) -> None:
@@ -1242,6 +1485,7 @@ def _insert_preview(
     destination,
     effects,
     now,
+    state_version=None,
 ) -> str:
     preview_id = _new_id()
     conn.execute(
@@ -1256,7 +1500,7 @@ def _insert_preview(
             operation,
             OPERATION_VERSION,
             json.dumps(request),
-            work["state_version"],
+            work["state_version"] if state_version is None else state_version,
             None if binding is None else binding["id"],
             None if binding is None else binding["influence_version_id"],
             base_id,
@@ -1277,6 +1521,12 @@ def _derive(project, conn, child_id: str, request: dict, operation: str, created
         "mark": request.get("mark"),
         "host_revision_id": request.get("host_revision_id"),
         "separator": request.get("separator"),
+        "passage_revision_id": request.get("passage_revision_id"),
+        "omission": request.get("omission"),
+        "context": request.get("context"),
+        "prompt_version": request.get("prompt_version"),
+        "provider_window": request.get("provider_window"),
+        "omitted_text": request.get("omitted_text"),
     }
     parameters = {key: value for key, value in parameters.items() if value is not None}
     project.insert_run(conn, run_id, operation, child_id, parameters, created)
@@ -1335,6 +1585,8 @@ def _preview_payload(project, conn, row) -> dict:
         "donor_text": donor_text,
         "separator": request.get("separator"),
         "protected": protected,
+        "provider_window": request.get("provider_window"),
+        "omitted_text": request.get("omitted_text"),
         "created_at": row["created_at"],
     }
 

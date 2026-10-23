@@ -21,7 +21,7 @@ from ncm_art.model_adapter.tinystories import (
 from ncm_art.storage.errors import ProjectError
 from ncm_art.storage.project import Project
 
-NCM_OPERATIONS = frozenset({"reconstruct", "variants"})
+NCM_OPERATIONS = frozenset({"reconstruct", "variants", "encode_corpus", "pair_reconstruct", "latent_graft"})
 MODEL_PROFILE = "tinystories-v1"
 EXECUTION_PROFILE = "cpu-fp32-eager-v1"
 
@@ -33,6 +33,18 @@ def execute_job(project: Project, bundle, job: dict, before_candidate=None) -> N
             result = _reconstruct(project, bundle, job)
         elif job["operation"] == "variants":
             result = _variants(project, bundle, job, before_candidate)
+        elif job["operation"] == "encode_corpus":
+            from ncm_art.comparison.jobs import execute_encode
+
+            result = execute_encode(project, bundle, job)
+        elif job["operation"] == "pair_reconstruct":
+            from ncm_art.comparison.jobs import execute_pair
+
+            result = execute_pair(project, bundle, job)
+        elif job["operation"] == "latent_graft":
+            from ncm_art.comparison.jobs import execute_graft
+
+            result = execute_graft(project, bundle, job)
         else:
             project.fail(job_id, "JOB_FAILED", f"Unknown operation {job['operation']}.")
             return

@@ -84,6 +84,7 @@ export function App() {
   const [error, setError] = useState("");
   const [place, setPlace] = useState<"desk" | "correspondences">("desk");
   const [title, setTitle] = useState("");
+  const [archive, setArchive] = useState<File | null>(null);
   const [retained, setRetained] = useState(3);
   const [advanced, setAdvanced] = useState(false);
   const [temperature, setTemperature] = useState("1");
@@ -270,6 +271,25 @@ export function App() {
     }
   }
 
+  async function importProject(event: FormEvent) {
+    event.preventDefault();
+    if (!archive) return;
+    setError("");
+    try {
+      const encoded = await readFile(archive);
+      const imported = await api<ProjectSummary>("/api/v1/projects/import", {
+        method: "POST",
+        body: JSON.stringify({ content_base64: encoded }),
+      });
+      setArchive(null);
+      loadedFor.current = null;
+      await reload();
+      await openProject(imported.id);
+    } catch (reason) {
+      setError(reason instanceof Error ? reason.message : String(reason));
+    }
+  }
+
   async function openProject(projectId: string) {
     if (projectId === projectRef.current) return;
     setError("");
@@ -432,6 +452,19 @@ export function App() {
               <input value={title} onChange={(event) => setTitle(event.target.value)} placeholder="Untitled" />
             </label>
             <button type="submit">Create project</button>
+          </form>
+          <form onSubmit={(event) => void importProject(event)}>
+            <label>
+              Project archive
+              <input
+                type="file"
+                accept=".zip,application/zip"
+                onChange={(event) => setArchive(event.target.files?.[0] ?? null)}
+              />
+            </label>
+            <button type="submit" disabled={!archive}>
+              Import project
+            </button>
           </form>
           <ul className="projects">
             {projects.map((project) => (
@@ -876,4 +909,17 @@ function CandidateCard({
       </article>
     </li>
   );
+}
+
+function readFile(file: File): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => {
+      const value = String(reader.result || "");
+      const comma = value.indexOf(",");
+      resolve(comma >= 0 ? value.slice(comma + 1) : value);
+    };
+    reader.onerror = () => reject(reader.error);
+    reader.readAsDataURL(file);
+  });
 }

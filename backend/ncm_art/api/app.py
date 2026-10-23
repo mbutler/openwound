@@ -300,11 +300,15 @@ def create_app(library: Library, token_counter=None) -> FastAPI:
             headers={"Content-Disposition": 'attachment; filename="openwound-reading.txt"'},
         )
 
+    from ncm_art.api.comparisons import register as register_comparisons
     from ncm_art.api.corpus import register
+    from ncm_art.api.exports import register as register_exports
     from ncm_art.api.works import register as register_works
 
     register(application, library)
     register_works(application, library)
+    register_exports(application, library)
+    register_comparisons(application, library)
 
     dist = repo_root() / "frontend" / "dist"
     if dist.is_dir():

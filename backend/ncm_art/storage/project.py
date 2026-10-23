@@ -318,8 +318,9 @@ class Project:
             rows = conn.execute("SELECT * FROM passage_revision ORDER BY created_at, rowid").fetchall()
             parents = self._parents(conn)
         items = [self._revision_from_row(row, parents) for row in rows]
-        # Work candidates stay on the work. The desk history lists desk passages.
-        return [item for item in items if item["origin_kind"] != "candidate"]
+        # Work candidates and corpus encodings stay off the desk history.
+        hidden = {"candidate", "corpus_encoding"}
+        return [item for item in items if item["origin_kind"] not in hidden]
 
     def commit_text(
         self,
@@ -525,6 +526,8 @@ class Project:
         tokenizer_fingerprint: str,
         generator_fingerprint: str,
         display_policy: str | None,
+        relationship: str = "generated_from",
+        extra_parents: list[tuple[str, str]] | None = None,
     ) -> dict:
         """Commit one generated passage and its sampled hierarchy in one transaction."""
         digest = self._write_text(text)
@@ -550,9 +553,17 @@ class Project:
                 conn,
                 child_id=revision_id,
                 parent_id=parent_id,
-                relationship="generated_from",
+                relationship=relationship,
                 run_id=run_id,
             )
+            for extra_parent, extra_relationship in extra_parents or []:
+                self.insert_provenance(
+                    conn,
+                    child_id=revision_id,
+                    parent_id=extra_parent,
+                    relationship=extra_relationship,
+                    run_id=run_id,
+                )
             self.insert_representation(
                 conn,
                 {
@@ -659,6 +670,8 @@ class Project:
         # A seed the server invents is not part of the client's request. The same
         # omitted-seed retry must return this job rather than conflict with itself.
         assign_seed = operation == "variants" and "base_seed" not in stored
+        assign_graft_seed = operation == "latent_graft" and "seed" not in stored
+        assign_repair_seeds = operation == "omit_repair" and "seeds" not in stored
         digest = _request_hash(stored)
         with self._conn() as conn:
             conn.execute("BEGIN IMMEDIATE")
@@ -689,6 +702,13 @@ class Project:
             now = _now()
             if assign_seed:
                 stored["base_seed"] = secrets.randbelow(0x100000000)
+            if assign_graft_seed:
+                stored["seed"] = secrets.randbelow(0x100000000)
+            if assign_repair_seeds:
+                count = stored.get("candidate_count")
+                if isinstance(count, bool) or not isinstance(count, int) or not 1 <= count <= 8:
+                    raise ProjectError("INVALID_TEXT", "Ask for one to eight repairs.", {"candidate_count": count})
+                stored["seeds"] = [secrets.randbelow(0x100000000) for _ in range(count)]
             conn.execute(
                 """INSERT INTO job(id, client_request_id, request_hash, operation, request_json, state,
                                     progress_json, cancel_requested, created_at, updated_at)

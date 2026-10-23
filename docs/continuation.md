@@ -1,6 +1,6 @@
 # Continuation
 
-Increment C is in place. The artist can keep an ordered work, transfer a passage into it, bind one name-withholding influence, preview the change, adopt it, and return the held name. The governing contract is `openwound-v4-correspondences-build-spec.md`.
+Increment E is in place. Saved NCM codes can be compared at a chosen prefix, and a latent graft can replace codes without copying a phrase. The governing contract is `openwound-v4-correspondences-build-spec.md`. Increments A–D remain the Correspondences release.
 
 ## Completed
 
@@ -9,10 +9,13 @@ Increment C is in place. The artist can keep an ordered work, transfer a passage
 - Protected insertion keeps the donor bytes exact. A name rule that would change them is refused. A later edit or return over those bytes conflicts unless the protection is released.
 - Preview does not create entries or held names. Adoption, retry, a conflicting request id, and a stale work or binding behave as separate outcomes. Reopening shows the displaced entry and the name's origin and recipient.
 - The desk draft, the selected passage, and the 128-token gate are unchanged by this cycle.
+- An omission repair asks only for the marked span. The provider sees the declared window with that one occurrence replaced by `_____`. Adopting a repair uses the same commit as a transfer, and the name rule does not apply.
+- A readable export can include an appendix. A project archive imports as a new project. Unfinished jobs are marked interrupted and are not replayed. Embeddings and credentials stay out of the archive.
+- Format 5 adds saved code comparisons. Slot agreement uses equal code slots. A length band of 16 unpadded tokens supplies the common-code baseline. A latent graft keeps the retained prefix and regenerates after it.
 
 ## Next
 
-Increment D: marked omission and a configured instruction-provider repair, then portable export and import. Do not treat the deterministic cycle as that repair.
+Increment F is the next operator chosen from use. Do not start healing, role inversion, or register translation until a session asks for one of them.
 
 ## Invariants
 
@@ -24,4 +27,6 @@ Increment D: marked omission and a configured instruction-provider repair, then 
 
 ## Blockers
 
-None for the deterministic work cycle. The instruction-provider repair in Increment D has not been configured.
+No instruction provider is configured on this machine. Import, transfer, returning a name, and reopening an imported project work without one. A live repair, with the actual request and the model's replacement, has not been recorded.
+
+A live TinyStories comparison was recorded. Two short passages, 8 tokens and 7 tokens, agreed on 0.160 of the slots in the first three levels and on none of the slots in the first level. The length band was too small for a baseline adjustment. A latent graft of that pair regenerated a passage and left the work and the desk draft unchanged. Pair reconstruction of that same pair was not run.

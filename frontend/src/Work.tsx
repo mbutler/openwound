@@ -57,6 +57,8 @@ type Preview = {
   donor_text: string | null;
   separator: string | null;
   protected: Protection[];
+  provider_window?: string | null;
+  omitted_text?: string | null;
 };
 
 type WorkRecord = {
@@ -120,6 +122,7 @@ function eventLabel(action: string, detail: Record<string, unknown>): string {
   if (action === "restore") return "Restored an entry.";
   if (action === "reorder") return "Reordered the entries.";
   if (action === "retarget") return "Chose a current place for a held name.";
+  if (action === "repair") return `Adopted a repair. “${detail.omitted_text}” became “${detail.replacement_text}”.`;
   return action;
 }
 
@@ -127,10 +130,12 @@ export function Work({
   projectId,
   donor,
   onEncounter,
+  onEntries,
 }: {
   projectId: string | null;
   donor: Donor | null;
   onEncounter: (text: string, anchor: Anchor) => void;
+  onEntries?: (entries: { id: string; revision_id: string; text: string; removed: boolean }[]) => void;
 }) {
   const [works, setWorks] = useState<{ id: string; title: string }[]>([]);
   const [workId, setWorkId] = useState<string | null>(null);
@@ -145,6 +150,15 @@ export function Work({
   const [mark, setMark] = useState<{ start: number; end: number } | null>(null);
   const [preview, setPreview] = useState<Preview | null>(null);
   const [error, setError] = useState("");
+  const [repairEntryId, setRepairEntryId] = useState<string | null>(null);
+  const [omissionNeedle, setOmissionNeedle] = useState("");
+  const [omissions, setOmissions] = useState<{ start: number; end: number }[]>([]);
+  const [omission, setOmission] = useState<{ start: number; end: number } | null>(null);
+  const [repairCount, setRepairCount] = useState(3);
+  const [repairJob, setRepairJob] = useState<string | null>(null);
+  const [repairProgress, setRepairProgress] = useState("");
+  const [releaseRepair, setReleaseRepair] = useState(false);
+  const [appendix, setAppendix] = useState(false);
   const [drafts, setDrafts] = useState<Record<string, string>>({});
   const [edits, setEdits] = useState<Record<string, string>>({});
 
@@ -160,10 +174,12 @@ export function Work({
     setWorkId(chosen);
     if (!chosen) {
       setWork(null);
+      onEntries?.([]);
       return;
     }
     const loaded = await api<WorkRecord>(`/api/v1/projects/${projectId}/works/${chosen}`);
     setWork(loaded);
+    onEntries?.(loaded.entries);
     setDrafts((current) => {
       const next = { ...current };
       for (const entry of loaded.entries) {
@@ -176,7 +192,9 @@ export function Work({
   useEffect(() => {
     setWorkId(null);
     setWork(null);
+    onEntries?.([]);
     setPreview(null);
+    setError("");
     if (!projectId) return;
     let cancel = false;
     refresh(null).catch((reason: Error) => {
@@ -186,6 +204,33 @@ export function Work({
       cancel = true;
     };
   }, [projectId]);
+
+  useEffect(() => {
+    if (!projectId || !workId || !repairJob) return;
+    const timer = window.setInterval(() => {
+      void api<{ state: string; progress: { stage?: string }; error: { message?: string } | null; result: { preview_ids?: string[] } | null }>(
+        `/api/v1/jobs/${repairJob}`,
+      )
+        .then(async (job) => {
+          if (job.state === "queued" || job.state === "running") {
+            setRepairProgress(job.progress.stage ? `${job.progress.stage}.` : "Preparing a repair.");
+            return;
+          }
+          setRepairJob(null);
+          setRepairProgress("");
+          const loaded = await api<WorkRecord>(`/api/v1/projects/${projectId}/works/${workId}`);
+          setWork(loaded);
+          onEntries?.(loaded.entries);
+          const prepared = loaded.previews.find((item) => job.result?.preview_ids?.includes(item.id));
+          if (prepared) setPreview(prepared);
+          if (job.state !== "succeeded" && job.state !== "cancelled") {
+            setError(job.error?.message || "The repair was not prepared.");
+          }
+        })
+        .catch((reason: Error) => setError(reason.message));
+    }, 1000);
+    return () => window.clearInterval(timer);
+  }, [projectId, workId, repairJob]);
 
   function fail(reason: unknown) {
     setError(reason instanceof Error ? reason.message : "The work could not be changed.");
@@ -248,6 +293,57 @@ export function Work({
     setMarks(found);
     setMark(found.length === 1 ? found[0] : null);
     setError(found.length ? "" : "That name is not in the selected passage.");
+  }
+
+  function showOmissions(event: FormEvent) {
+    event.preventDefault();
+    const entry = work?.entries.find((item) => item.id === repairEntryId);
+    if (!entry) return;
+    const found = findIn(entry.text, omissionNeedle);
+    setOmissions(found);
+    setOmission(found.length === 1 ? found[0] : null);
+    setError(found.length ? "" : "That span is not in this entry.");
+  }
+
+  async function prepareRepair() {
+    if (!projectId || !work || !repairEntryId || !omission) return;
+    const entry = work.entries.find((item) => item.id === repairEntryId);
+    if (!entry) return;
+    setError("");
+    const span = byteSpan(entry.text, omission.start, omission.end, 0);
+    const queued = await api<{ id: string }>(`/api/v1/projects/${projectId}/works/${work.id}/repairs`, {
+      method: "POST",
+      body: JSON.stringify({
+        client_request_id: crypto.randomUUID(),
+        passage_revision_id: entry.revision_id,
+        omission: span,
+        context: { start_byte: 0, end_byte: new TextEncoder().encode(entry.text).length },
+        destination: {
+          kind: "replace_entry",
+          entry_id: entry.id,
+          expected_revision_id: entry.revision_id,
+        },
+        candidate_count: repairCount,
+        release_protection: releaseRepair,
+      }),
+    });
+    setRepairProgress("Preparing a repair.");
+    setRepairJob(queued.id);
+  }
+
+  async function download(path: string, filename: string, init?: RequestInit) {
+    const response = await fetch(path, init);
+    if (!response.ok) {
+      const body = await response.json().catch(() => null);
+      throw new Error(body?.message || response.statusText);
+    }
+    const blob = await response.blob();
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = filename;
+    link.click();
+    URL.revokeObjectURL(url);
   }
 
   async function previewTransfer() {
@@ -392,6 +488,7 @@ export function Work({
 
   const active = work?.entries.filter((entry) => !entry.removed) ?? [];
   const removed = work?.entries.filter((entry) => entry.removed) ?? [];
+  const repairEntry = active.find((entry) => entry.id === repairEntryId) ?? null;
 
   return (
     <section className="work-panel" aria-label="Work">
@@ -454,6 +551,18 @@ export function Work({
                 </button>
                 <button type="button" onClick={() => void previewInsert(entry).catch(fail)} disabled={!donor}>
                   Insert the selected passage
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setRepairEntryId(entry.id);
+                    setOmissions([]);
+                    setOmission(null);
+                    setOmissionNeedle("");
+                    setReleaseRepair(false);
+                  }}
+                >
+                  Mark an omission
                 </button>
               </p>
               <details>
@@ -535,9 +644,56 @@ export function Work({
               </li>
             ))}
           </ul>
+          {repairEntry && (
+            <form onSubmit={showOmissions} aria-label="Omission repair">
+              <h3>Omit a span from this entry</h3>
+              <p className="prose">{repairEntry.text}</p>
+              <p>
+                The model sees this whole entry with the marked occurrence removed. Bytes outside that mark stay. The name rule does not apply.
+              </p>
+              <label>
+                Mark the omitted span
+                <input value={omissionNeedle} onChange={(event) => setOmissionNeedle(event.target.value)} />
+              </label>
+              <button type="submit">Show occurrences</button>
+              {omissions.map((item) => (
+                <button
+                  type="button"
+                  key={`${item.start}-${item.end}`}
+                  aria-pressed={omission === item}
+                  onClick={() => setOmission(item)}
+                >
+                  Omit “{repairEntry.text.slice(item.start, item.end)}” at this place
+                </button>
+              ))}
+              <label>
+                Repairs to prepare
+                <input
+                  type="number"
+                  min={1}
+                  max={8}
+                  value={repairCount}
+                  onChange={(event) => setRepairCount(Number(event.target.value))}
+                />
+              </label>
+              {repairEntry.protected.length > 0 && (
+                <label>
+                  <input type="checkbox" checked={releaseRepair} onChange={(event) => setReleaseRepair(event.target.checked)} />
+                  Release protection on this entry
+                </label>
+              )}
+              <p>
+                <button type="button" onClick={() => void prepareRepair().catch(fail)} disabled={!omission || Boolean(repairJob)}>
+                  Prepare repairs
+                </button>
+              </p>
+              {repairProgress && <p className="legend">{repairProgress}</p>}
+            </form>
+          )}
           {donor && (
             <form onSubmit={showMarks}>
               <h3>Transfer the selected passage</h3>
+              <p className="legend">Transfer copies text into the work.</p>
               <p className="legend">{donor.title}</p>
               <p className="prose">{donor.text}</p>
               <p>This adds the passage at the end of the work.</p>
@@ -573,6 +729,12 @@ export function Work({
               {!preview.binding_applies && preview.operation === "transfer_fragment_v1" && (
                 <p>No influence changed this passage.</p>
               )}
+              {preview.operation === "omit_and_repair_v1" && (
+                <p>
+                  The model proposed this replacement for the marked omission. The name rule does not apply. The surrounding bytes were not rewritten.
+                </p>
+              )}
+              {preview.provider_window && <p className="legend">The model saw: {preview.provider_window}</p>}
               {preview.separator ? <p className="legend">Separator before the inserted passage: “{preview.separator}”</p> : null}
               {preview.protected.map((item) => (
                 <p className="legend" key={`${item.start_byte}-${item.end_byte}`}>
@@ -596,7 +758,7 @@ export function Work({
           )}
           {work.previews.length > 0 && (
             <details>
-              <summary>Prepared transfers not yet added</summary>
+              <summary>Prepared changes not yet added</summary>
               <ul>
                 {work.previews.map((item) => (
                   <li key={item.id}>
@@ -642,12 +804,41 @@ export function Work({
               ))}
             </ul>
           </details>
+          <h3>Export</h3>
+          <label>
+            <input type="checkbox" checked={appendix} onChange={(event) => setAppendix(event.target.checked)} />
+            Include sources, influences, held names, and history
+          </label>
+          <p>
+            <button
+              type="button"
+              onClick={() =>
+                void download(
+                  `/api/v1/projects/${projectId}/works/${work.id}/export?form=markdown&appendix=${appendix ? 1 : 0}`,
+                  appendix ? "work-with-appendix.md" : "work.md",
+                ).catch(fail)
+              }
+            >
+              Download this work
+            </button>
+            <button
+              type="button"
+              onClick={() =>
+                void download(`/api/v1/projects/${projectId}/export`, "openwound-project.zip", { method: "POST" }).catch(fail)
+              }
+            >
+              Download the project archive
+            </button>
+          </p>
           <details>
             <summary>History</summary>
             <ol>
               {work.events.map((event) => (
                 <li key={event.id}>
                   {eventLabel(event.action, event.detail)}
+                  {typeof event.detail.provider_window === "string" && (
+                    <p className="legend">The model saw: {event.detail.provider_window}</p>
+                  )}
                   {event.earlier_text && <p className="prose">{event.earlier_text}</p>}
                 </li>
               ))}

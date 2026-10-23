@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState, type FormEvent } from "react";
 import { api, ApiError, type Job } from "./api";
+import { Compare } from "./Compare";
 import { Work } from "./Work";
 
 type Anchor = {
@@ -125,6 +126,7 @@ export function Correspondences({ projectId }: { projectId: string | null }) {
   const [pasted, setPasted] = useState("");
   const [familyId, setFamilyId] = useState("");
   const [error, setError] = useState("");
+  const [workEntries, setWorkEntries] = useState<{ id: string; revision_id: string; text: string; removed: boolean }[]>([]);
   const [notice, setNotice] = useState("");
 
   useEffect(() => {
@@ -462,6 +464,12 @@ export function Correspondences({ projectId }: { projectId: string | null }) {
             projectId={projectId}
             donor={focus && context ? { text: focus.text, title: context.title, anchor: focus.anchor } : null}
             onEncounter={(text, anchor) => void search(["lexical", "semantic"], text, anchor).catch((reason: Error) => setError(reason.message))}
+            onEntries={setWorkEntries}
+          />
+          <Compare
+            projectId={projectId}
+            passage={focus ? { id: focus.id, text: focus.text, title: context?.title || "Passage" } : null}
+            entries={workEntries}
           />
           <p>
             <button
