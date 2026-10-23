@@ -29,3 +29,11 @@ Adapter error codes `INPUT_EMPTY`, `INVALID_SAMPLING`, and `PROFILE_MISMATCH` na
 `huggingface_hub` 2.3.0 downloaded the pinned TinyStories revision into `.model-cache`, which is not committed. SHA-256 values for `config.yaml` and `README.md` were computed from those files and then written into the profile. The four hashes supplied by the specification matched.
 
 `python -m ncm_art.cli smoke` loaded the tokenizer checkpoint before constructing the generator, encoded "Anna borrowed a red kite from Ben." (8 BPE tokens), reconstructed all twelve levels, and branched at retained counts 0, 3, and 12. Two retained-3 variations used base seed 42 and candidate seed 1. Retaining all twelve levels made no generator calls and returned the source codes. The final reconstruction is not the source sentence. The outputs were not edited. The record is `fixtures/recorded/tinystories-cpu-fp32-eager-v1.json`.
+
+## 2026-10-23 Writing desk
+
+Each project is a directory under `.projects/`, which is not committed. Passage text is exact UTF-8 stored by SHA-256. SQLite holds revisions, provenance, the editor draft, and one job queue. The API process counts tokens with the released BPE files and does not load the generator. `python -m ncm_art.cli serve` spawns one worker with `spawn`, and that worker loads TinyStories.
+
+A variation request may omit the seed. The server assigns an unsigned 32-bit seed when it stores the job, and that assigned seed is left out of the idempotency hash, so a retry of the same request returns the original job. An explicit seed is part of the hash. The desk accepts one through eight candidates and defaults to four. A finished or cancelled job does not write the editor draft or the selected passage. A later variation leaves the latest successful reconstruction available.
+
+Sequences, works, grafting, and the other later milestones are absent from this desk. The automated desk tests run the random short model in-process. The browser check of the desk used the released checkpoint.

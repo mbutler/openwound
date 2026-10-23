@@ -51,6 +51,8 @@ def test_create_reopen_and_queue_four_candidates(tmp_path):
     assert reopened.status_code == 200
     assert reopened.json()["draft"]["text"] == "Anna borrowed a kite."
     assert reopened.json()["latest_job"]["id"] == body["id"]
+    assert reopened.json()["reconstruction"] is None
+    assert reopened.json()["variations"] is None
 
 
 def test_overlong_text_is_rejected_before_a_job(tmp_path):

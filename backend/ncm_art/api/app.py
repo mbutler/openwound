@@ -75,6 +75,8 @@ def _desk(project) -> dict:
         "revisions": project.revisions(),
         "annotations": project.annotations(),
         "latest_job": project.latest_job(),
+        "reconstruction": project.latest_succeeded("reconstruct"),
+        "variations": project.latest_succeeded("variants"),
     }
 
 

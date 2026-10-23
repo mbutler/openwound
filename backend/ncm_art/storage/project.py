@@ -475,6 +475,15 @@ class Project:
             row = conn.execute("SELECT * FROM job ORDER BY created_at DESC LIMIT 1").fetchone()
         return self._job(row) if row else None
 
+    def latest_succeeded(self, operation: str) -> dict | None:
+        with self._conn() as conn:
+            row = conn.execute(
+                """SELECT * FROM job WHERE operation=? AND state='succeeded'
+                   ORDER BY created_at DESC LIMIT 1""",
+                (operation,),
+            ).fetchone()
+        return self._job(row) if row else None
+
     def claim_next_job(self) -> dict | None:
         with self._conn() as conn:
             conn.execute("BEGIN IMMEDIATE")

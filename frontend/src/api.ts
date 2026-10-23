@@ -1,0 +1,138 @@
+export type ProjectSummary = {
+  id: string;
+  title: string;
+  created_at: string;
+  format_version: number;
+};
+
+export type ParentEdge = {
+  parent_id: string;
+  relationship: string;
+  run_id: string | null;
+};
+
+export type Revision = {
+  id: string;
+  text: string;
+  text_sha256: string;
+  origin_kind: string;
+  source_id: string | null;
+  created_at: string;
+  disposition: string | null;
+  parents: ParentEdge[];
+};
+
+export type Annotation = {
+  id: string;
+  revision_id: string;
+  kind: string;
+  value: string;
+  text_sha256: string;
+};
+
+export type Frame = {
+  level: number;
+  revision_id: string;
+  text: string;
+  raw_token_ids?: number[];
+};
+
+export type Candidate = {
+  index: number;
+  seed: number;
+  prediction_count: number;
+  revision_id: string;
+  text: string;
+};
+
+export type Job = {
+  id: string;
+  operation: string;
+  state: string;
+  progress: {
+    stage?: string;
+    level?: number;
+    level_count?: number;
+    candidate?: number;
+    candidate_count?: number;
+  };
+  request: {
+    retained_level_count?: number;
+    candidate_count?: number;
+    base_seed?: number;
+    passage_revision_id?: string;
+    sampling?: { temperature: number; top_k: number; top_p: number };
+  };
+  result: {
+    frames?: Frame[];
+    candidates?: Candidate[];
+    passage_revision_id?: string;
+  } | null;
+  error: { code?: string; message?: string } | null;
+};
+
+export type Desk = {
+  project: { id: string; title: string; format_version: number };
+  draft: { text: string; base_revision_id: string | null };
+  selected_revision_id: string | null;
+  revisions: Revision[];
+  annotations: Annotation[];
+  latest_job: Job | null;
+  reconstruction: Job | null;
+  variations: Job | null;
+};
+
+export type Status = {
+  app_version: string;
+  project_id: string | null;
+  worker: string;
+  worker_error: string | null;
+  model_profile: string;
+  execution_profile: string;
+};
+
+export type TokenCount = {
+  token_count: number;
+  text_length: number;
+  too_long: boolean;
+  policy: string;
+};
+
+export type History = {
+  revision: Revision;
+  run: {
+    id: string;
+    operation: string;
+    parameters: {
+      retained_level_count?: number | null;
+      base_seed?: number | null;
+      display_policy?: string;
+      sampling?: { temperature: number; top_k: number; top_p: number } | null;
+    };
+  } | null;
+  annotations: Annotation[];
+};
+
+export class ApiError extends Error {
+  code: string;
+  constructor(message: string, code = "ERROR") {
+    super(message);
+    this.code = code;
+  }
+}
+
+export async function api<T>(path: string, init?: RequestInit): Promise<T> {
+  const response = await fetch(path, {
+    ...init,
+    headers: {
+      ...(init?.body ? { "Content-Type": "application/json" } : {}),
+      ...init?.headers,
+    },
+  });
+  const text = await response.text();
+  const body = text ? JSON.parse(text) : null;
+  if (!response.ok) {
+    throw new ApiError(body?.message || response.statusText, body?.code || "ERROR");
+  }
+  return body as T;
+}

@@ -1,0 +1,252 @@
+:root {
+  color: #221e1a;
+  background: #f3efe6;
+  font-family: "Avenir Next", "Segoe UI", sans-serif;
+  line-height: 1.45;
+}
+
+* { box-sizing: border-box; }
+
+body {
+  margin: 0;
+}
+
+button,
+input,
+textarea,
+select {
+  font: inherit;
+  color: inherit;
+}
+
+button,
+a {
+  cursor: pointer;
+}
+
+button:focus-visible,
+a:focus-visible,
+input:focus-visible,
+textarea:focus-visible,
+select:focus-visible {
+  outline: 2px solid #7d2e2a;
+  outline-offset: 2px;
+}
+
+button,
+input,
+select,
+textarea {
+  background: #f7f4ee;
+  border: 1px solid #221e1a;
+  border-radius: 0;
+}
+
+button {
+  padding: 0.35rem 0.7rem;
+}
+
+button[aria-current="true"] {
+  background: #e7dfd2;
+}
+
+button:disabled {
+  color: #746c62;
+  border-color: #b7b0a4;
+}
+
+.desk {
+  min-height: 100vh;
+}
+
+.top {
+  display: flex;
+  justify-content: space-between;
+  gap: 1rem;
+  align-items: baseline;
+  padding: 0.8rem 1.2rem;
+  border-bottom: 1px solid #d5cfc3;
+}
+
+.mark {
+  margin: 0;
+  font-family: "Iowan Old Style", Palatino, Georgia, serif;
+  font-size: 1.4rem;
+  letter-spacing: 0.04em;
+  color: #7d2e2a;
+}
+
+.worker,
+.quiet,
+.count {
+  color: #5c564c;
+}
+
+.columns {
+  display: grid;
+  grid-template-columns: 16rem minmax(0, 1fr) 18rem;
+  min-height: calc(100vh - 3.4rem);
+}
+
+.rail,
+.history {
+  padding: 1rem;
+  border-right: 1px solid #d5cfc3;
+}
+
+.history {
+  border-right: 0;
+  border-left: 1px solid #d5cfc3;
+}
+
+main {
+  padding: 1.2rem 1.6rem 3rem;
+  max-width: 46rem;
+}
+
+h1,
+h2,
+h3,
+.prose,
+textarea,
+.passage-label {
+  font-family: "Iowan Old Style", Palatino, Georgia, serif;
+}
+
+h1 { font-weight: 500; margin: 0 0 0.6rem; }
+h2 { font-size: 1.15rem; font-weight: 500; }
+h3 { font-size: 1rem; font-weight: 500; margin: 0; }
+
+textarea {
+  width: 100%;
+  min-height: 14rem;
+  padding: 0.8rem;
+  font-size: 1.25rem;
+  line-height: 1.5;
+  resize: vertical;
+}
+
+label {
+  display: grid;
+  gap: 0.25rem;
+  margin: 0.5rem 0;
+}
+
+.projects,
+.cards,
+.history ul {
+  list-style: none;
+  padding: 0;
+  margin: 0.6rem 0 0;
+}
+
+.projects button,
+.history li button:first-child {
+  width: 100%;
+  text-align: left;
+  margin-bottom: 0.35rem;
+}
+
+.history li {
+  margin-bottom: 0.6rem;
+}
+
+.origin,
+.flag,
+.state {
+  display: inline-block;
+  margin-right: 0.4rem;
+  font-family: "Avenir Next", "Segoe UI", sans-serif;
+  font-size: 0.75rem;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.preview {
+  display: block;
+  font-family: "Iowan Old Style", Palatino, Georgia, serif;
+}
+
+.actions,
+.exports {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  align-items: center;
+}
+
+.banner {
+  min-height: 1.4rem;
+}
+
+.error {
+  color: #7d2e2a;
+}
+
+.prose {
+  white-space: pre-wrap;
+  font-size: 1.15rem;
+}
+
+.cards article,
+.reconstruction,
+.inspector {
+  border-top: 1px solid #d5cfc3;
+  margin-top: 1.2rem;
+  padding-top: 0.6rem;
+}
+
+.pair {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 1rem;
+}
+
+.diff del {
+  text-decoration: line-through;
+}
+
+.diff ins {
+  text-decoration: underline;
+}
+
+.legend,
+.raw {
+  display: block;
+  font-family: "Avenir Next", "Segoe UI", sans-serif;
+  font-size: 0.85rem;
+  color: #5c564c;
+}
+
+.advanced {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.5rem 1rem;
+}
+
+.vary input[type="range"],
+.reconstruction input[type="range"] {
+  width: 12rem;
+}
+
+@media (max-width: 900px) {
+  .columns {
+    grid-template-columns: 1fr;
+  }
+
+  .rail,
+  .history {
+    border: 0;
+    border-bottom: 1px solid #d5cfc3;
+  }
+
+  .pair {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  * {
+    scroll-behavior: auto !important;
+  }
+}

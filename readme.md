@@ -19,4 +19,12 @@ v2 carries the same method as v1. It is a separate version because the program w
 
 ## v4
 
-v4 is a local studio for writing with the released Next-Concept Modeling TinyStories model. The requirements are in `ncm_art_studio_openwound_v4_technical_spec.md`. The pinned research code is in `vendor/ncm` at commit `c702742`. The first build step is the inference contract: encode a passage, reconstruct all twelve levels, and generate variations that retain none, three, or all of those levels. A random short model with the released architectural flags passes that contract in `tests/adapter`. The released TinyStories checkpoint also loads. A CPU smoke record, with the source reconstruction and two variations that keep the first three levels, is in `fixtures/recorded/tinystories-cpu-fp32-eager-v1.json`.
+v4 is a local studio for writing with the released Next-Concept Modeling TinyStories model. The requirements are in `ncm_art_studio_openwound_v4_technical_spec.md`. The pinned research code is in `vendor/ncm` at commit `c702742`. A passage is encoded as a twelve-level residual hierarchy, reconstructed level by level, and varied by keeping a prefix of those codes. A random short model with the released architectural flags passes that contract in `tests/adapter`. The released TinyStories checkpoint also loads. A CPU smoke record is in `fixtures/recorded/tinystories-cpu-fp32-eager-v1.json`.
+
+The writing desk is the interface for that work. It creates and reopens a project, counts BPE tokens, reconstructs all twelve levels, and asks for four variations. Adopting a result, editing it, and returning to the original are separate steps, and each saved passage keeps its provenance. From the repository root, with the environment in `.venv` and the desk built in `frontend/dist`:
+
+```
+.venv/bin/python -m ncm_art.cli serve
+```
+
+That listens on `127.0.0.1:8765` and starts the checkpoint worker. `.venv/bin/python -m ncm_art.cli doctor` checks the pinned model files first.
