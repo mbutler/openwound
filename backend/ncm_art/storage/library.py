@@ -51,7 +51,9 @@ class Library:
         path = self.root / project_id
         if not (path / "project.json").is_file():
             raise ProjectError("NOT_FOUND", "That project is not in this library.", status=404)
-        return Project(path)
+        project = Project(path)
+        project.ensure_current()
+        return project
 
     def active_project_id(self) -> str | None:
         return self._read_index().get("active_project_id")

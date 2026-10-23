@@ -11,15 +11,31 @@ import {
   type Status,
   type TokenCount,
 } from "./api";
+import { Correspondences } from "./Correspondences";
 import { wordDiff } from "./diff";
 
 const ACTIVE = new Set(["queued", "running"]);
 
+function recordedRuns(history: History) {
+  const distinct = new Map<string, NonNullable<History["run"]>>();
+  for (const item of history.runs ?? []) {
+    if (item.run) distinct.set(item.run.id, item.run);
+  }
+  return [...distinct.values()];
+}
+
 function workerLabel(status: Status | null): string {
   if (!status) return "Checking the worker.";
-  if (status.worker === "starting") return "Loading the TinyStories checkpoint.";
-  if (status.worker === "ready") return "Checkpoint ready.";
+  if (status.worker === "starting") return "Starting the worker.";
   if (status.worker === "running") return "Working on the current passage.";
+  if (status.worker === "ready") {
+    const checkpoint = status.capabilities?.ncm;
+    if (checkpoint?.state === "ready") return "Checkpoint ready.";
+    if (checkpoint?.state === "unavailable") {
+      return checkpoint.message || "The TinyStories checkpoint is not available.";
+    }
+    return "Worker ready. The checkpoint loads when a passage is encoded.";
+  }
   if (status.worker_error) return status.worker_error;
   return "The inference worker is stopped.";
 }
@@ -66,6 +82,7 @@ export function App() {
   const [job, setJob] = useState<Job | null>(null);
   const [notice, setNotice] = useState("");
   const [error, setError] = useState("");
+  const [place, setPlace] = useState<"desk" | "correspondences">("desk");
   const [title, setTitle] = useState("");
   const [retained, setRetained] = useState(3);
   const [advanced, setAdvanced] = useState(false);
@@ -393,9 +410,21 @@ export function App() {
     <div className="desk">
       <header className="top">
         <p className="mark">Openwound</p>
+        <nav className="places" aria-label="Workspace">
+          <button type="button" aria-current={place === "desk" ? "true" : undefined} onClick={() => setPlace("desk")}>
+            Desk
+          </button>
+          <button
+            type="button"
+            aria-current={place === "correspondences" ? "true" : undefined}
+            onClick={() => setPlace("correspondences")}
+          >
+            Correspondences
+          </button>
+        </nav>
         <p className="worker">{workerLabel(status)}</p>
       </header>
-      <div className="columns">
+      <div className={place === "desk" ? "columns" : "columns correspondences-columns"}>
         <aside className="rail">
           <form onSubmit={createProject}>
             <label>
@@ -418,6 +447,10 @@ export function App() {
             ))}
           </ul>
         </aside>
+        {place === "correspondences" ? (
+          <Correspondences projectId={desk?.project.id ?? null} />
+        ) : (
+          <>
         <main>
           {!desk && <p className="quiet">Create a project to begin a passage.</p>}
           {desk && (
@@ -670,9 +703,28 @@ export function App() {
                           {parent.relationship.replaceAll("_", " ")} {parent.parent_id}
                         </p>
                       ))}
-                      {history.run && (
+                      {recordedRuns(history).length > 1
+                        ? recordedRuns(history).map((run) => (
+                            <p key={run.id}>
+                              Operation: {run.operation}
+                              {run.parameters.donor
+                                ? ` Donor ${run.parameters.donor.owner_kind} ${run.parameters.donor.start_byte}–${run.parameters.donor.end_byte}`
+                                : ""}
+                              {run.parameters.host_revision_id ? ` Host ${run.parameters.host_revision_id}` : ""}
+                            </p>
+                          ))
+                        : history.run && (
                         <>
                           <p>Operation: {history.run.operation}</p>
+                          {history.run.parameters.donor && (
+                            <p>
+                              Donor {history.run.parameters.donor.owner_kind} {history.run.parameters.donor.start_byte}–
+                              {history.run.parameters.donor.end_byte}
+                            </p>
+                          )}
+                          {history.run.parameters.host_revision_id && (
+                            <p>Host {history.run.parameters.host_revision_id}</p>
+                          )}
                           {history.run.parameters.retained_level_count !== undefined &&
                             history.run.parameters.retained_level_count !== null && (
                               <p>Levels kept: {history.run.parameters.retained_level_count}</p>
@@ -755,6 +807,8 @@ export function App() {
           </ul>
           {!desk?.revisions.length && <p className="quiet">Saved passages appear here.</p>}
         </aside>
+          </>
+        )}
       </div>
     </div>
   );

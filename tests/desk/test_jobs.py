@@ -54,6 +54,12 @@ def test_reconstruction_keeps_the_draft_and_records_twelve_frames(tmp_path, bund
     assert len(decoded) == 12
     assert decoded[0]["parents"][0]["relationship"] == "decoded_from"
     assert decoded[0]["parents"][0]["parent_id"] == revision["id"]
+    encoding = project.representation(finished["result"]["encoding_id"])
+    assert encoding["kind"] == "source_encoding"
+    assert encoding["token_count"] > 0
+    assert encoding["padded_token_ids"]
+    assert sum(encoding["level_lengths"]) == len(encoding["codes"])
+    assert encoding["hierarchy_available"] is True
 
 
 def test_cancel_keeps_the_candidates_already_written(tmp_path, bundle):
@@ -82,6 +88,10 @@ def test_cancel_keeps_the_candidates_already_written(tmp_path, bundle):
     generated = [item for item in project.revisions() if item["origin_kind"] == "generated"]
     assert len(generated) == 1
     assert generated[0]["parents"][0]["relationship"] == "generated_from"
+    kept = project.sampled_hierarchy(generated[0]["id"])
+    assert kept["hierarchy_available"] is True
+    assert kept["token_count"] is None
+    assert kept["raw_token_ids"]
 
 
 def test_two_candidates_use_distinct_stored_seeds(tmp_path, bundle):
@@ -101,3 +111,46 @@ def test_two_candidates_use_distinct_stored_seeds(tmp_path, bundle):
     assert seeds[0] == 7
     assert seeds[1] != seeds[0]
     assert all(item["prediction_count"] == 0 for item in finished["result"]["candidates"])
+    hierarchies = [project.sampled_hierarchy(item["revision_id"]) for item in finished["result"]["candidates"]]
+    assert hierarchies[0]["seed"] == seeds[0]
+    assert hierarchies[1]["seed"] == seeds[1]
+    assert hierarchies[0]["source_representation_id"] == hierarchies[1]["source_representation_id"]
+    assert hierarchies[0]["id"] != hierarchies[1]["id"]
+    assert all(item["token_count"] is None and item["padded_token_ids"] is None for item in hierarchies)
+
+
+def test_reencoding_edited_text_leaves_the_sampled_hierarchy(tmp_path, bundle):
+    project, revision = _prepared(tmp_path, "A short passage")
+    recipe = {
+        "passage_revision_id": revision["id"],
+        "retained_level_count": 3,
+        "candidate_count": 1,
+        "sampling": {"temperature": 1.0, "top_k": 0, "top_p": 1.0},
+        "base_seed": 11,
+    }
+    job = project.submit_job("variants", recipe, "vary-keep")
+    execute_job(project, bundle, project.claim_next_job())
+    candidate = project.job(job["id"])["result"]["candidates"][0]
+    sampled = project.sampled_hierarchy(candidate["revision_id"])
+    original_id = sampled["id"]
+    original_codes = list(sampled["codes"])
+    assert sampled["kind"] == "sampled_hierarchy"
+    assert sampled["raw_token_ids"]
+    source = project.representation(sampled["source_representation_id"])
+    assert source["kind"] == "source_encoding"
+    assert source["passage_revision_id"] == revision["id"]
+
+    project.select(candidate["revision_id"])
+    project.set_draft(candidate["text"] + " more")
+    edited = project.ensure_input_revision()
+    reencode = project.submit_job("reconstruct", {"passage_revision_id": edited["id"]}, "reencode")
+    execute_job(project, bundle, project.claim_next_job())
+    assert project.job(reencode["id"])["state"] == "succeeded"
+
+    again = project.sampled_hierarchy(candidate["revision_id"])
+    assert again["id"] == original_id
+    assert again["codes"] == original_codes
+    child = project.representations_for(edited["id"])
+    assert [item["kind"] for item in child] == ["source_encoding"]
+    assert child[0]["id"] != original_id
+    assert child[0]["token_count"] is not None

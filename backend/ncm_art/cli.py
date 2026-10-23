@@ -18,8 +18,19 @@ from ncm_art.model_adapter.tinystories import branch_tinystories, decode_display
 
 
 def _models_install(args) -> int:
+    if args.profile == "minilm-l6-v2":
+        from ncm_art.retrieval.minilm import install_minilm, verify_minilm
+        from ncm_art.storage.errors import ProjectError
+
+        try:
+            install_minilm()
+            directory = verify_minilm()
+        except ProjectError as error:
+            raise AdapterError(error.code, error.message) from error
+        print(f"Verified MiniLM files in {directory}")
+        return 0
     if args.profile != "tinystories-v1":
-        raise AdapterError("MODEL_NOT_READY", "The only installable profile is tinystories-v1.")
+        raise AdapterError("MODEL_NOT_READY", "Install tinystories-v1 or minilm-l6-v2.")
     directory = install_tinystories()
     hashes = verify_bundle(directory)
     print(f"Verified {len(hashes)} TinyStories files in {directory}")

@@ -21,6 +21,10 @@ from ncm_art.model_adapter.tinystories import (
 from ncm_art.storage.errors import ProjectError
 from ncm_art.storage.project import Project
 
+NCM_OPERATIONS = frozenset({"reconstruct", "variants"})
+MODEL_PROFILE = "tinystories-v1"
+EXECUTION_PROFILE = "cpu-fp32-eager-v1"
+
 
 def execute_job(project: Project, bundle, job: dict, before_candidate=None) -> None:
     job_id = job["id"]
@@ -49,14 +53,25 @@ def _encode(project: Project, bundle, job: dict, passage: dict) -> tuple[list[in
     return tokens[0].detach().cpu().tolist(), codes[0].detach().cpu().tolist(), token_count
 
 
+def _layout(bundle) -> tuple[list[int], list[int]]:
+    levels = [int(level) for level in bundle.vqvae.vq.levels]
+    sizes = [int(size) for size in bundle.vqvae.vq.vqvae_vocab_sizes]
+    return levels, sizes
+
+
+def _fingerprints(bundle) -> tuple[str, str]:
+    hashes = getattr(bundle, "file_hashes", None) or {}
+    return hashes.get("tokenizer.pt", ""), hashes.get("generator.pt", "")
+
+
 def _run_parameters(bundle, recipe: dict, extra: dict) -> dict:
     fingerprint = {}
     hashes = getattr(bundle, "file_hashes", None) or {}
     if hashes:
         fingerprint = {"artifact_sha256": hashes}
     return {
-        "model_profile": "tinystories-v1",
-        "execution_profile": "cpu-fp32-eager-v1",
+        "model_profile": MODEL_PROFILE,
+        "execution_profile": EXECUTION_PROFILE,
         "display_policy": DISPLAY_POLICY_CUT_AT_EOS,
         "adapter_version": __version__,
         "torch": torch.__version__,
@@ -77,21 +92,40 @@ def _show(bundle, raw_ids) -> str:
     )
 
 
+def _save_source(project: Project, bundle, passage: dict, operation: str, recipe: dict, extra: dict, padded, code_list, token_count):
+    levels, sizes = _layout(bundle)
+    tokenizer_fingerprint, generator_fingerprint = _fingerprints(bundle)
+    return project.save_source_run(
+        operation=operation,
+        passage_revision_id=passage["id"],
+        parameters=_run_parameters(bundle, recipe, extra),
+        token_count=token_count,
+        codes=code_list,
+        padded_token_ids=padded,
+        level_lengths=levels,
+        codebook_sizes=sizes,
+        model_profile=MODEL_PROFILE,
+        execution_profile=EXECUTION_PROFILE,
+        tokenizer_fingerprint=tokenizer_fingerprint,
+        generator_fingerprint=generator_fingerprint,
+        display_policy=DISPLAY_POLICY_CUT_AT_EOS,
+    )
+
+
 def _reconstruct(project: Project, bundle, job: dict) -> dict:
     recipe = job["request"]
     passage = project.revision(recipe["passage_revision_id"])
-    _padded, code_list, token_count = _encode(project, bundle, job, passage)
-    run_id = project.record_run(
+    padded, code_list, token_count = _encode(project, bundle, job, passage)
+    run_id, encoding_id = _save_source(
+        project,
+        bundle,
+        passage,
         "reconstruct",
-        passage["id"],
-        _run_parameters(bundle, recipe, {"token_count": token_count}),
-    )
-    encoding_id = project.record_encoding(
-        passage["id"],
-        token_count,
+        recipe,
+        {"token_count": token_count},
+        padded,
         code_list,
-        _padded,
-        run_id,
+        token_count,
     )
     project.update_progress(job["id"], {"stage": "reconstruct", "level": 0, "level_count": 12})
     trace = reconstruct_trace(bundle.vqvae, torch.tensor([code_list], dtype=torch.long))
@@ -141,11 +175,19 @@ def _variants(project: Project, bundle, job: dict, before_candidate) -> dict | N
     retained = int(recipe["retained_level_count"])
     count = int(recipe["candidate_count"])
     level_count = len(bundle.vqvae.vq.levels)
+    levels, sizes = _layout(bundle)
+    tokenizer_fingerprint, generator_fingerprint = _fingerprints(bundle)
     seeds = [candidate_seed(int(recipe["base_seed"]), index) for index in range(count)]
-    run_id = project.record_run(
+    run_id, source_representation_id = _save_source(
+        project,
+        bundle,
+        passage,
         "variants",
-        passage["id"],
-        _run_parameters(bundle, recipe, {"candidate_seeds": seeds, "token_count": token_count}),
+        recipe,
+        {"candidate_seeds": seeds, "token_count": token_count},
+        _padded,
+        code_list,
+        token_count,
     )
     candidates = []
     for index, seed in enumerate(seeds):
@@ -191,13 +233,26 @@ def _variants(project: Project, bundle, job: dict, before_candidate) -> dict | N
             sampling,
             on_level=on_level,
         )
-        text = _show(bundle, bundle.vqvae.decode(branched.codes).argmax(dim=-1))
-        revision = project.commit_text(
+        raw = bundle.vqvae.decode(branched.codes).argmax(dim=-1)
+        text = _show(bundle, raw)
+        revision = project.save_generated_candidate(
             text,
-            "generated",
             parent_id=passage["id"],
-            relationship="generated_from",
             run_id=run_id,
+            codes=[int(code) for code in branched.codes[0].tolist()],
+            level_lengths=levels,
+            codebook_sizes=sizes,
+            raw_token_ids=[int(token) for token in raw[0].tolist()],
+            retained_level_count=retained,
+            sampling=recipe.get("sampling"),
+            seed=seed,
+            source_representation_id=source_representation_id,
+            candidate_index=index,
+            model_profile=MODEL_PROFILE,
+            execution_profile=EXECUTION_PROFILE,
+            tokenizer_fingerprint=tokenizer_fingerprint,
+            generator_fingerprint=generator_fingerprint,
+            display_policy=DISPLAY_POLICY_CUT_AT_EOS,
         )
         candidates.append(
             {
@@ -205,6 +260,7 @@ def _variants(project: Project, bundle, job: dict, before_candidate) -> dict | N
                 "seed": seed,
                 "prediction_count": branched.prediction_count,
                 "revision_id": revision["id"],
+                "representation_id": revision["representation_id"],
                 "text": text,
             }
         )

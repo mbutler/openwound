@@ -11,7 +11,7 @@ from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 
 from ncm_art import __version__
-from ncm_art.jobs.worker import worker_error, worker_state
+from ncm_art.jobs.worker import read_capabilities, worker_error, worker_state
 from ncm_art.model_adapter.errors import AdapterError
 from ncm_art.model_adapter.profile import repo_root
 from ncm_art.model_adapter.sampling import validate_sampling
@@ -101,12 +101,22 @@ def create_app(library: Library, token_counter=None) -> FastAPI:
 
     @application.get("/api/v1/status")
     def status():
-        project = library.active_project()
+        project_id = library.active_project_id()
+        project_error = None
+        try:
+            project = library.active_project()
+        except ProjectError as error:
+            project = None
+            project_error = {"code": error.code, "message": error.message}
+        if project is not None:
+            project_id = project.manifest()["id"]
         return {
             "app_version": __version__,
-            "project_id": None if project is None else project.manifest()["id"],
+            "project_id": project_id,
+            "project_error": project_error,
             "worker": worker_state(library),
             "worker_error": worker_error(library),
+            "capabilities": read_capabilities(library),
             "model_profile": "tinystories-v1",
             "execution_profile": "cpu-fp32-eager-v1",
         }
@@ -160,12 +170,21 @@ def create_app(library: Library, token_counter=None) -> FastAPI:
     def passage_history(revision_id: str):
         project = library.require_active()
         revision = project.revision(revision_id)
-        run = None
-        if revision["parents"] and revision["parents"][0].get("run_id"):
-            run = project.run(revision["parents"][0]["run_id"])
+        runs = []
+        for parent in revision["parents"]:
+            if parent.get("run_id"):
+                runs.append(
+                    {
+                        "parent_id": parent["parent_id"],
+                        "relationship": parent["relationship"],
+                        "run": project.run(parent["run_id"]),
+                    }
+                )
+        run = runs[0]["run"] if runs else None
         return {
             "revision": revision,
             "run": run,
+            "runs": runs,
             "annotations": project.annotations(revision_id),
         }
 
@@ -177,7 +196,8 @@ def create_app(library: Library, token_counter=None) -> FastAPI:
     def tokenize(body: TokenBody):
         return count_tokens(body.text)
 
-    def _queue(operation: str, recipe: dict, client_request_id: str):
+    def _prepare_ncm_passage():
+        """TinyStories length applies only to operations that encode with that model."""
         project = library.require_active()
         passage = project.ensure_input_revision()
         counted = count_tokens(passage["text"])
@@ -189,19 +209,23 @@ def create_app(library: Library, token_counter=None) -> FastAPI:
                 f"Select a passage of at most {counted['text_length']} BPE tokens. This one is {counted['token_count']}.",
                 {"token_count": counted["token_count"], "text_length": counted["text_length"]},
             )
-        recipe = dict(recipe)
-        recipe["passage_revision_id"] = passage["id"]
-        recipe["token_count"] = counted["token_count"]
+        return project, passage, counted
+
+    def _enqueue(project, operation: str, recipe: dict, client_request_id: str):
         job = project.submit_job(operation, recipe, client_request_id)
         return JSONResponse(status_code=202, content=job)
 
     @application.post("/api/v1/jobs/reconstruct")
     def reconstruct(body: JobBody):
-        return _queue(
+        project, passage, counted = _prepare_ncm_passage()
+        return _enqueue(
+            project,
             "reconstruct",
             {
                 "model_profile_id": "tinystories-v1",
                 "execution_profile_id": "cpu-fp32-eager-v1",
+                "passage_revision_id": passage["id"],
+                "token_count": counted["token_count"],
             },
             body.client_request_id,
         )
@@ -239,7 +263,10 @@ def create_app(library: Library, token_counter=None) -> FastAPI:
         }
         if body.base_seed is not None:
             recipe["base_seed"] = candidate_seed(body.base_seed, 0)
-        return _queue("variants", recipe, body.client_request_id)
+        project, passage, counted = _prepare_ncm_passage()
+        recipe["passage_revision_id"] = passage["id"]
+        recipe["token_count"] = counted["token_count"]
+        return _enqueue(project, "variants", recipe, body.client_request_id)
 
     @application.get("/api/v1/jobs/{job_id}")
     def get_job(job_id: str):
@@ -272,6 +299,12 @@ def create_app(library: Library, token_counter=None) -> FastAPI:
             "\n".join(lines),
             headers={"Content-Disposition": 'attachment; filename="openwound-reading.txt"'},
         )
+
+    from ncm_art.api.corpus import register
+    from ncm_art.api.works import register as register_works
+
+    register(application, library)
+    register_works(application, library)
 
     dist = repo_root() / "frontend" / "dist"
     if dist.is_dir():

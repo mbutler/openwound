@@ -42,6 +42,7 @@ export type Candidate = {
   seed: number;
   prediction_count: number;
   revision_id: string;
+  representation_id?: string;
   text: string;
 };
 
@@ -85,8 +86,13 @@ export type Desk = {
 export type Status = {
   app_version: string;
   project_id: string | null;
+  project_error?: { code: string; message: string } | null;
   worker: string;
   worker_error: string | null;
+  capabilities?: {
+    ncm?: { profile: string; state: string; message: string | null };
+    embedding?: { profile: string; state: string; message: string | null };
+  };
   model_profile: string;
   execution_profile: string;
 };
@@ -98,18 +104,23 @@ export type TokenCount = {
   policy: string;
 };
 
+export type RunRecord = {
+  id: string;
+  operation: string;
+  parameters: {
+    retained_level_count?: number | null;
+    base_seed?: number | null;
+    display_policy?: string;
+    sampling?: { temperature: number; top_k: number; top_p: number } | null;
+    donor?: { owner_kind: string; owner_id: string; start_byte: number; end_byte: number };
+    host_revision_id?: string;
+  };
+};
+
 export type History = {
   revision: Revision;
-  run: {
-    id: string;
-    operation: string;
-    parameters: {
-      retained_level_count?: number | null;
-      base_seed?: number | null;
-      display_policy?: string;
-      sampling?: { temperature: number; top_k: number; top_p: number } | null;
-    };
-  } | null;
+  run: RunRecord | null;
+  runs?: { parent_id: string; relationship: string; run: RunRecord }[];
   annotations: Annotation[];
 };
 
@@ -125,7 +136,7 @@ export async function api<T>(path: string, init?: RequestInit): Promise<T> {
   const response = await fetch(path, {
     ...init,
     headers: {
-      ...(init?.body ? { "Content-Type": "application/json" } : {}),
+      ...(typeof init?.body === "string" ? { "Content-Type": "application/json" } : {}),
       ...init?.headers,
     },
   });

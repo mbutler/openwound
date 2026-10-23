@@ -79,6 +79,30 @@ def test_selecting_an_earlier_passage_restores_its_text(tmp_path):
     assert any(item["text"] == "revised" for item in desk["revisions"])
 
 
+def test_status_stays_up_without_a_checkpoint(tmp_path):
+    client = _client(tmp_path)
+    created = client.post("/api/v1/projects", json={"title": "Desk"})
+    project_id = created.json()["id"]
+    client.put("/api/v1/draft", json={"text": "Anna borrowed a kite."})
+    client.post("/api/v1/passages", json={"text": "Anna borrowed a kite."})
+    status = client.get("/api/v1/status")
+    assert status.status_code == 200
+    body = status.json()
+    assert body["worker"] == "stopped"
+    assert body["capabilities"]["ncm"]["state"] == "unknown"
+    assert body["project_error"] is None
+    desk = client.get("/api/v1/desk")
+    assert desk.status_code == 200
+    assert desk.json()["draft"]["text"] == "Anna borrowed a kite."
+    history_id = desk.json()["selected_revision_id"]
+    history = client.get(f"/api/v1/passages/{history_id}/history")
+    assert history.status_code == 200
+    assert history.json()["revision"]["id"] == history_id
+    from ncm_art.storage.migrate import SCHEMA_VERSION
+
+    assert created.json()["format_version"] == SCHEMA_VERSION
+
+
 def test_released_bpe_counts_the_smoke_sentence():
     from ncm_art.tokenize import preview_tokens
 

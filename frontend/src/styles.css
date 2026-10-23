@@ -68,6 +68,11 @@ button:disabled {
   border-bottom: 1px solid #d5cfc3;
 }
 
+.places {
+  display: flex;
+  gap: 0.4rem;
+}
+
 .mark {
   margin: 0;
   font-family: "Iowan Old Style", Palatino, Georgia, serif;
@@ -229,8 +234,79 @@ label {
   width: 12rem;
 }
 
+.correspondences-columns {
+  grid-template-columns: 16rem minmax(0, 1fr);
+}
+
+.correspondences {
+  padding: 1.2rem 1.6rem 3rem;
+  max-width: none;
+}
+
+.reading {
+  display: grid;
+  grid-template-columns: minmax(16rem, 22rem) minmax(0, 40rem);
+  gap: 1.5rem;
+  align-items: start;
+}
+
+.passages,
+.hits,
+.reasons {
+  list-style: none;
+  padding: 0;
+  margin: 0.4rem 0 0;
+}
+
+.passages button,
+.hits article {
+  text-align: left;
+}
+
+.passages button {
+  width: 100%;
+  margin-bottom: 0.35rem;
+  white-space: pre-wrap;
+}
+
+.hits article,
+.context,
+.saved {
+  border-top: 1px solid #d5cfc3;
+  margin-top: 1rem;
+  padding-top: 0.6rem;
+}
+
+.correspondences textarea {
+  min-height: 8rem;
+}
+
+.work-panel {
+  margin-top: 2rem;
+}
+
+.work-entry {
+  border-top: 1px solid #d5cfc3;
+  margin-top: 1rem;
+  padding-top: 0.6rem;
+}
+
+dialog {
+  max-width: 36rem;
+  width: calc(100% - 2rem);
+  border: 1px solid #221e1a;
+  background: #f7f4ee;
+  padding: 1rem;
+}
+
+dialog::backdrop {
+  background: rgba(34, 30, 26, 0.35);
+}
+
 @media (max-width: 900px) {
-  .columns {
+  .columns,
+  .correspondences-columns,
+  .reading {
     grid-template-columns: 1fr;
   }
 

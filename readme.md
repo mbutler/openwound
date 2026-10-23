@@ -27,4 +27,14 @@ The writing desk is the interface for that work. It creates and reopens a projec
 .venv/bin/python -m ncm_art.cli serve
 ```
 
-That listens on `127.0.0.1:8765` and starts the checkpoint worker. `.venv/bin/python -m ncm_art.cli doctor` checks the pinned model files first.
+That listens on `127.0.0.1:8765` and starts the worker. The worker stays up when the TinyStories checkpoint is missing; encoding and variation load it when a job asks. Opening a project, the draft, and saved history do not load the model. `.venv/bin/python -m ncm_art.cli doctor` checks the pinned model files first.
+
+The header also opens Correspondences. Import a UTF-8 `.txt` or `.md` file, or paste text. The original bytes are kept, and paragraphs can be read with the passages around them. Shared-word search works with no model. Related meaning uses the pinned MiniLM embedding model:
+
+```
+.venv/bin/python -m ncm_art.cli models install minilm-l6-v2
+```
+
+Those weights stay in `.model-cache` and are not committed. If they are missing, shared-word search still works. A saved correspondence reopens with its passages and interpretation history.
+
+A work is a separate ordered text. Transfer a selected passage into it. Bind the influence that withholds a marked name, preview the passage with that name replaced by `_____`, and add it to the work. The name stays in the index until it is returned. Previewing does not change the work, and the desk draft is left alone.

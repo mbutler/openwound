@@ -37,3 +37,37 @@ Each project is a directory under `.projects/`, which is not committed. Passage 
 A variation request may omit the seed. The server assigns an unsigned 32-bit seed when it stores the job, and that assigned seed is left out of the idempotency hash, so a retry of the same request returns the original job. An explicit seed is part of the hash. The desk accepts one through eight candidates and defaults to four. A finished or cancelled job does not write the editor draft or the selected passage. A later variation leaves the latest successful reconstruction available.
 
 Sequences, works, grafting, and the other later milestones are absent from this desk. The automated desk tests run the random short model in-process. The browser check of the desk used the released checkpoint.
+
+## 2026-10-23 Correspondences, increment A
+
+`openwound-v4-correspondences-build-spec.md` is the next product contract. The writing-desk specification stays in force for exact text, inference, and provenance. Format version 2 is the first correspondences schema. Opening a format-1 project migrates it. The database schema version is the authority if the manifest was not replaced. The backup is `backups/schema-1/` inside the project, written with the SQLite backup API, and it includes the original manifest and text assets. A newer format is rejected and left unchanged. New tables use foreign keys. The original tables still do not.
+
+A source encoding and a sampled hierarchy are different representation rows. The hierarchy does not store a token count or padded input ids. Variation jobs now keep the sampled codes, the level layout, and the raw decoded token ids. Re-encoding edited text inserts a new source encoding and does not update the earlier hierarchy. Variations saved before this change are marked unavailable for exact-hierarchy operations. Their displayed text hash and seed are kept when the old job recorded them. Codes that were never stored are not invented.
+
+Reconstruction frames still use the existing one-based completed-level numbers. Retained counts stay 0 through 12. Changing the frame numbering would rewrite the desk's current level display.
+
+The worker's ready file means the process is alive. TinyStories readiness is `worker.capabilities`. The checkpoint loads on the first reconstruct or variation job and is not required to read a project. The 128-token check runs only for those two operations, not as a gate on every queued job.
+
+## 2026-10-23 Correspondences, increment B
+
+Format 3 adds imported source versions, paragraph and window fragments, an FTS5 index, correspondences, and an embedding cache. Opening a format-1 project migrates through format 2. `backups/schema-1/` is still the pre-representation copy. `backups/schema-2/` is the copy taken before the corpus tables. Desk rows stay in the `desk` collection and are not encounter evidence.
+
+Import accepts UTF-8 `.txt` and `.md`, or pasted text. File bytes are sent as base64 inside the JSON body so the server can reject invalid UTF-8 without a multipart parser. Identical bytes share an asset. The same filename is not an identity. A family link is stored only when the artist marks the import as a revision of an existing source.
+
+Paragraphs split on blank lines. A model window is a child fragment with its own byte span, token count, and limit. The source asset is not shortened. Search indexes leaves: a window when one exists, otherwise the paragraph. Fragments are not passage revisions.
+
+Lexical search quotes the artist's words before FTS5. The stopword policy is `english-function-words-v1`. Exact phrase offsets come from the source bytes. A case-folded hit is labeled folded. Semantic search is `minilm-l6-v2-cosine-low-overlap-v1`: cosine order inside a pool, then drop content-word overlap above 0.6 when that leaves any candidate. The two views are interleaved. They are not added into one score.
+
+The embedding profile is `sentence-transformers/all-MiniLM-L6-v2` at `1110a243fdf4706b3f48f1d95db1a4f5529b4d41`, 384 dimensions, 256 tokens including special tokens, truncation disabled. `sentence-transformers` 6.2.0 is installed for that job. The API process does not load it. Checksums are in `model_profiles/minilm-l6-v2.json`. On this machine the model encoded "The lantern crossed the river.", "A lamp went over the water.", and "Birds slept in the eaves." The normalized scores against the river sentence were 0.4755 and 0.2403. A 402-token input was rejected and was not embedded. Another passage is a seeded shuffle with a saved cursor.
+
+## 2026-10-23 Correspondences, increment C
+
+Format 4 adds works, entries, influence versions, one active binding per work, operation previews, application receipts, events, held names, and protected ranges. Opening a format-1 project still migrates through formats 2 and 3. `backups/schema-3/` is the copy taken before the work tables. Candidate revisions use origin `candidate` and stay off the desk history. The desk draft and selected passage are not written by a transfer.
+
+The operative preset is `withhold_marked_span_v1`. It replaces one marked span with the configured text, default `_____`, when a donor enters a work. A prose influence can be saved and cannot be bound. Preview writes the base and final revisions and does not create entries or held names. Adoption is one transaction: the receipt is checked before a stale-state rejection, then the entry, event, held name, and receipt are written together. A repeated request returns that receipt. The same request id with a different preview conflicts.
+
+A protected insertion keeps the donor bytes exact. The name rule cannot change those bytes; the preview is refused and the work is left as it was. A later edit or return that would change a protected span is refused unless the artist releases that protection. A label whose bytes no longer match is marked released.
+
+Returning a name uses the recorded placeholder, or a span the artist selects after the entry has changed. It does not search the work for the first copy of the placeholder. Removing an entry detaches its names. Unbinding affects the next transfer and leaves the earlier names held.
+
+A host-and-donor operation records both passage parents. The provenance view lists every parent and, when the runs differ, each operation. A source donor is carried on the run because a provenance edge points at a passage revision.
