@@ -14,4 +14,12 @@ The specification proposes an `ncm-art-studio/` project root and a file named `S
 
 ## 2026-10-23 Python
 
-The specification asks for Python 3.12. This machine's system Python is 3.9.6. `conda create` stopped because the Anaconda channel terms of service have not been accepted, and those terms were not accepted on the artist's behalf. uv 0.13.5, installed under `~/.local/bin`, provides the project interpreter. The environment lives in `.venv` and is not committed. Exact dependency versions will be locked once they install.
+The specification asks for Python 3.12. This machine's system Python is 3.9.6. `conda create` stopped because the Anaconda channel terms of service have not been accepted, and those terms were not accepted on the artist's behalf. uv 0.13.5, installed under `~/.local/bin`, provides CPython 3.12.15. The environment lives in `.venv` and is not committed. `uv.lock` records the installed set.
+
+Inference imports from the pinned quantizer require NumPy, so it is a direct dependency. Evaluation packages from the upstream requirements file, including `transformers`, `rouge_score`, and `sacrebleu`, are not installed.
+
+The specification's preparation environment was PyTorch 2.14.1+cpu. This machine installed the macOS wheel `torch==2.14.1` and ran the fixture on CPU, FP32, eager mode. MPS was not used. On the random twelve-level fixture, the incremental full-grid latent matched `idx_to_z_q` exactly, so no floating-point tolerance was introduced.
+
+The package version is `4.0.0.dev0`. In the specification, "version 1" means the first complete studio release. That release is still openwound v4.
+
+Adapter error codes `INPUT_EMPTY`, `INVALID_SAMPLING`, and `PROFILE_MISMATCH` name failures the HTTP list had not yet spelled out. They use the same envelope idea: a code, a readable message, and details.
