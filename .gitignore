@@ -8,6 +8,7 @@ dist/
 build/
 
 .model-cache/
+.projects/
 
 node_modules/
 frontend/dist/

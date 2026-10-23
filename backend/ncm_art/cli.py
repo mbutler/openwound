@@ -137,6 +137,38 @@ def _smoke(args) -> int:
     return 0
 
 
+def _serve(args) -> int:
+    import multiprocessing
+    import os
+    import webbrowser
+    from pathlib import Path
+
+    import uvicorn
+
+    from ncm_art.jobs.worker import worker_main
+    from ncm_art.model_adapter.profile import repo_root
+    from ncm_art.storage.library import Library
+
+    library_root = Path(os.environ.get("NCM_ART_LIBRARY", repo_root() / ".projects"))
+    library = Library(library_root)
+    stop = library.root / "worker.stop"
+    stop.unlink(missing_ok=True)
+    context = multiprocessing.get_context("spawn")
+    process = context.Process(target=worker_main, args=(str(library.root),), name="ncm-art-worker")
+    process.start()
+    if args.open:
+        webbrowser.open(f"http://127.0.0.1:{args.port}")
+    try:
+        uvicorn.run("ncm_art.api.app:app", host="127.0.0.1", port=args.port)
+    finally:
+        stop.write_text("stop", encoding="utf-8")
+        process.join(timeout=5)
+        if process.is_alive():
+            process.terminate()
+            process.join(timeout=5)
+    return 0
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(prog="ncm_art")
     commands = parser.add_subparsers(dest="command", required=True)
@@ -154,6 +186,11 @@ def main(argv: list[str] | None = None) -> int:
     smoke = commands.add_parser("smoke")
     smoke.add_argument("--manifest", default=None)
     smoke.set_defaults(func=_smoke)
+
+    serve = commands.add_parser("serve")
+    serve.add_argument("--port", type=int, default=8765)
+    serve.add_argument("--open", action="store_true")
+    serve.set_defaults(func=_serve)
 
     args = parser.parse_args(argv)
     if args.command == "models" and args.models_command is None:
