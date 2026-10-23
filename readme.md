@@ -13,6 +13,10 @@ Babble (2002) predates these versions and lives outside this repository. The thr
 | v1 | 2005 | Perl | Parts of speech. Substitute each word with another word of the same tag, drawn from the source text. | `legacy-versions/v1-perl-2005-parts-of-speech` |
 | v2 | 2009 | PHP | The same parts-of-speech idea, retagged with a bundled lexicon. Tagging works. Generation was never written. | `legacy-versions/v2-php-2009-parts-of-speech` |
 | v3 | 2016 | Node.js | Word vectors plus parts of speech. Keep the source grammar and replace words with GloVe neighbors that share the tag. | `legacy-versions/v3-node-2016-word-vectors` |
-| v4 | 2026 | Python | In progress, in this directory. | `.` |
+| v4 | 2026 | Python | Next-Concept Modeling. Encode a short passage as a twelve-level residual hierarchy, reconstruct it level by level, and vary it by keeping a prefix of those codes. | `.` |
 
 v2 carries the same method as v1. It is a separate version because the program was rewritten and then left unfinished, and because the pages call themselves "Open Wound 2". The `version` field in v3's `package.json` is `2.5.0`, from when that package was the code at the root of this repo. The generation number is v3.
+
+## v4
+
+v4 is a local studio for writing with the released Next-Concept Modeling TinyStories model. The requirements are in `ncm_art_studio_openwound_v4_technical_spec.md`. The pinned research code is in `vendor/ncm` at commit `c702742`. The first build step is the inference contract: encode a passage, reconstruct all twelve levels, and generate variations that retain none, three, or all of those levels.

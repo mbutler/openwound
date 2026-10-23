@@ -1,0 +1,146 @@
+task: lm1b-large
+checkpoints:
+  generator: generator.pt
+  tokenizer: ../tokenizer.pt
+data: {}
+model:
+  n_layer: 36
+  n_head: 20
+  bias: true
+  dropout: 0.1
+  n_embd: 1280
+  context_length: 129
+  prefix_len: 1
+  raw_token_prefix: true
+  prefix_pad_token_id: 0
+  vocab_size:
+  - 8192
+  - 8192
+  - 8192
+  - 8192
+  - 8192
+  - 8192
+  - 8192
+  - 8192
+  - 8192
+  - 8192
+  - 8192
+  - 8192
+  predict_level0: false
+  query_level0: true
+  attn_pattern: block_diagonal
+  use_positional_encoding: true
+  use_level_encoding: true
+  use_rope: true
+  rope_base: 10000
+  use_qk_norm: true
+  use_flex_attention: false
+  ctx_encoder:
+    enabled: false
+    n_layer: 4
+    vocab_size: 30528
+  post_upsample_conv:
+    enabled: true
+    kernel_size: 3
+  shared_output_head: true
+  shared_head_per_level_bias: true
+tokenizer:
+  pre_tokenizer:
+    name: hf
+    tokenizer: hf
+    model_id: bert-base-uncased
+    special_tokens:
+      eos_token: '[CLS]'
+      pad_token: '[PAD]'
+  vqvae:
+    n_layers: 6
+    embed_dim: 384
+    in_vocab_size: 30528
+    context_length: 128
+    compression_factor: 1
+    dropout: 0.1
+    use_qk_norm: true
+    pre_quant_groupnorm: 4
+    pre_quant_dropout: 0.0
+    enc_positional: false
+    dec_positional: true
+    dec_layers: 4
+    vqvae_vocab_size:
+    - 8192
+    - 8192
+    - 8192
+    - 8192
+    - 8192
+    - 8192
+    - 8192
+    - 8192
+    - 8192
+    - 8192
+    - 8192
+    - 8192
+    checkpoint_path: ../tokenizer.pt
+    vector_quantizer_config:
+      clss: multiscale_residual_vector_quantizer
+      decay: 0.99
+      epsilon: 1.0e-05
+      commitment_cost: 0.25
+      learned_l1_sampling: true
+      learned_l1_cascade: false
+      learned_l1_cascade_base: 4
+      learned_all_sampling: false
+      quant_resi:
+        enabled: true
+        ratio: 0.5
+        share_mode: 0
+        learnable_ratio: false
+      levels:
+        use_manual_levels: true
+        manual_levels:
+        - 1
+        - 8
+        - 16
+        - 24
+        - 32
+        - 40
+        - 52
+        - 64
+        - 76
+        - 92
+        - 108
+        - 128
+      aux:
+        fine_drop:
+          dual: true
+          prob: 1.0
+          min_keep: 1
+          w_full: 0.7
+          w_trunc: 0.3
+        code_corruption:
+          enabled: true
+          mode: uniform
+          random_rate: true
+          low: 0.0
+          high: 1.0
+          skip_level0: true
+generation:
+  temperature: 1.0
+  top_k: 0
+  top_p: 1.0
+  cfg_scale: 0.0
+  frequency_penalty: 11.5
+  frequency_deficit: 2.0
+  adjacency_penalty: 10,4,0.5
+  frequency_allowance: generator.pt:inference.token_unigram
+  level0_unigram: generator.pt:inference.level0_unigram
+eval:
+  n_samples: 256
+  seeds:
+  - 42
+  - 0
+  - 1
+  - 2
+  - 3
+  batch_size: 8
+  n_shards: 2
+  metric: genppl_flm
+  ref_model: gpt2-large

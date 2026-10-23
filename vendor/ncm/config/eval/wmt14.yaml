@@ -1,0 +1,117 @@
+task: wmt14
+checkpoints:
+  generator: generator.pt
+  tokenizer: tokenizer.pt
+data:
+  test: sources.pickle
+  test_refs: reference_translations.pickle
+model:
+  n_layer: 12
+  n_head: 12
+  bias: true
+  dropout: 0.1
+  n_embd: 768
+  context_length: 160
+  prefix_len: 96
+  raw_token_prefix: true
+  prefix_pad_token_id: 151643
+  vocab_size:
+  - 4096
+  - 4096
+  - 4096
+  - 4096
+  - 4096
+  - 4096
+  - 4096
+  - 4096
+  - 4096
+  - 4096
+  predict_level0: true
+  attn_pattern: block_diagonal
+  use_positional_encoding: true
+  use_level_encoding: true
+  use_rope: true
+  rope_base: 100000
+  use_qk_norm: true
+  ctx_encoder:
+    enabled: false
+    n_layer: 4
+    vocab_size: 50304
+  use_flex_attention: false
+  untied_head_bias: false
+tokenizer:
+  pre_tokenizer:
+    name: hf
+    tokenizer: hf
+    model_id: Qwen/Qwen3-0.6B
+    special_tokens:
+      eos_token: <|im_end|>
+      pad_token: <|endoftext|>
+  vqvae:
+    n_layers: 6
+    embed_dim: 384
+    in_vocab_size: 151680
+    context_length: 64
+    compression_factor: 1
+    dropout: 0.1
+    pre_quant_groupnorm: 8
+    use_qk_norm: true
+    pre_quant_dropout: 0.25
+    vqvae_vocab_size:
+    - 4096
+    - 4096
+    - 4096
+    - 4096
+    - 4096
+    - 4096
+    - 4096
+    - 4096
+    - 4096
+    - 4096
+    - 4096
+    checkpoint_path: tokenizer.pt
+    vector_quantizer_config:
+      clss: multiscale_residual_vector_quantizer
+      decay: 0.99
+      epsilon: 1.0e-05
+      commitment_cost: 0.25
+      learned_l1_sampling: true
+      learned_l1_cascade: true
+      learned_l1_cascade_base: 4
+      learned_l1_cascade_norm: true
+      learned_l1_cascade_norm_final: true
+      learned_all_sampling: false
+      quant_resi:
+        enabled: true
+        ratio: 0.5
+        share_mode: 0
+        learnable_ratio: false
+      aux:
+        fine_drop:
+          prob: 0.5
+          min_keep: 1
+      levels:
+        use_manual_levels: true
+        manual_levels:
+        - 1
+        - 4
+        - 8
+        - 14
+        - 20
+        - 26
+        - 32
+        - 40
+        - 48
+        - 56
+        - 64
+generation:
+  temperature: 1.0
+  top_k: 1
+  top_p: 0.0
+  cfg_scale: 0.0
+eval:
+  split: test
+  n_docs: 3003
+  batch_size: 64
+  n_shards: 2
+  metric: bleu

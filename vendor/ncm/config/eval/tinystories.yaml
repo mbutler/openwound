@@ -1,0 +1,131 @@
+task: tinystories
+checkpoints:
+  generator: generator.pt
+  tokenizer: tokenizer.pt
+  bpe_vocab: bpe_vocab_8192.pickle
+  bpe_merges: bpe_merges_8192.pickle
+data: {}
+model:
+  n_layer: 12
+  n_head: 12
+  bias: true
+  dropout: 0.1
+  n_embd: 768
+  context_length: 129
+  prefix_len: 1
+  raw_token_prefix: true
+  prefix_pad_token_id: 1
+  vocab_size:
+  - 4096
+  - 4096
+  - 4096
+  - 4096
+  - 4096
+  - 4096
+  - 4096
+  - 4096
+  - 4096
+  - 4096
+  - 4096
+  predict_level0: false
+  attn_pattern: block_diagonal
+  use_positional_encoding: true
+  use_level_encoding: true
+  use_rope: true
+  rope_base: 100000
+  use_qk_norm: true
+  ctx_encoder:
+    enabled: false
+    n_layer: 4
+    vocab_size: 8192
+  use_flex_attention: false
+  query_level0: false
+  tie_heads_to_codebook: true
+  tie_heads_learn_scale: true
+tokenizer:
+  pre_tokenizer:
+    name: bpe
+    tokenizer: bpe
+    vocab_file_path: bpe_vocab_8192.pickle
+    merges_file_path: bpe_merges_8192.pickle
+    special_tokens:
+      eos_token: <|endoftext|>
+      pad_token: <|pad|>
+  vqvae:
+    n_layers: 6
+    embed_dim: 384
+    in_vocab_size: 8192
+    context_length: 128
+    compression_factor: 1
+    dropout: 0.3
+    pre_quant_groupnorm: 8
+    use_qk_norm: true
+    pre_quant_dropout: 0.0
+    vqvae_vocab_size:
+    - 4096
+    - 4096
+    - 4096
+    - 4096
+    - 4096
+    - 4096
+    - 4096
+    - 4096
+    - 4096
+    - 4096
+    - 4096
+    - 4096
+    checkpoint_path: tokenizer.pt
+    vector_quantizer_config:
+      clss: multiscale_residual_vector_quantizer
+      decay: 0.95
+      epsilon: 1.0e-05
+      commitment_cost: 0.25
+      learned_l1_sampling: true
+      learned_l1_cascade: true
+      learned_l1_cascade_base: 4
+      learned_all_sampling: false
+      quant_resi:
+        enabled: true
+        ratio: 0.5
+        share_mode: 0
+        learnable_ratio: false
+      aux:
+        fine_drop:
+          prob: 0.5
+          min_keep: 1
+      levels:
+        use_manual_levels: true
+        manual_levels:
+        - 1
+        - 8
+        - 16
+        - 24
+        - 32
+        - 40
+        - 52
+        - 64
+        - 76
+        - 92
+        - 108
+        - 128
+      learned_l1_cascade_norm: false
+      learned_l1_cascade_norm_final: false
+      ema_scale_by_world_size: false
+generation:
+  temperature: 1.0
+  top_k: 0
+  top_p: 1.0
+  cfg_scale: 0.0
+  level0_unigram: generator.pt:inference.level0_unigram
+eval:
+  n_samples: 256
+  seeds:
+  - 42
+  - 0
+  - 1
+  - 2
+  - 3
+  batch_size: 128
+  n_shards: 2
+  metric: genppl
+  ref_model: gpt2-large

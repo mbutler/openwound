@@ -1,0 +1,49 @@
+{
+  "id": "tinystories-v1",
+  "upstream_repository": "https://github.com/HazyResearch/ncm",
+  "upstream_revision": "c70274273f489abc73832b2b98584a8483b6b203",
+  "artifact_repository": "hazyresearch/ncm-checkpoints",
+  "artifact_revision": "d342ce8aaea58830eef3b8ad473664673e41f692",
+  "config_path": "vendor/ncm/config/eval/tinystories.yaml",
+  "text_length": 128,
+  "latent_width": 384,
+  "generator_width": 768,
+  "level_lengths": [1, 8, 16, 24, 32, 40, 52, 64, 76, 92, 108, 128],
+  "codebook_sizes": [4096, 4096, 4096, 4096, 4096, 4096, 4096, 4096, 4096, 4096, 4096, 4096],
+  "flat_code_count": 641,
+  "level_offsets": [0, 1, 9, 25, 49, 81, 121, 173, 237, 313, 405, 513, 641],
+  "generator_conditioning": "unconditional_one_EOS_token",
+  "default_retained_level_count": 3,
+  "temperature": 1.0,
+  "top_k": 0,
+  "top_p": 1.0,
+  "cfg_scale": 0.0,
+  "use_kv_cache": false,
+  "use_flex_attention": false,
+  "artifacts": {
+    "tinystories/generator.pt": {
+      "bytes": 356160651,
+      "sha256": "0acaf4f795390f9f7ccc8f84047867619a1d00e291681e299b855d7e563be6ff"
+    },
+    "tinystories/tokenizer.pt": {
+      "bytes": 221861835,
+      "sha256": "76e26003719db32dc3d542518951c286be07d6a5881f29ad5152d299764b0f81"
+    },
+    "tinystories/bpe_vocab_8192.pickle": {
+      "bytes": 95122,
+      "sha256": "fb176b4c68108e4b5ef61b9ff2af3731600124e3e160970a6bd78cd0a5d3ff6c"
+    },
+    "tinystories/bpe_merges_8192.pickle": {
+      "bytes": 108277,
+      "sha256": "0d4cab13f2e7b684b75eaa290a52e596ba87744ef13d943cf3a50a5a8e080ec1"
+    },
+    "tinystories/config.yaml": {
+      "bytes": 2483,
+      "sha256": null
+    },
+    "tinystories/README.md": {
+      "bytes": 255,
+      "sha256": null
+    }
+  }
+}

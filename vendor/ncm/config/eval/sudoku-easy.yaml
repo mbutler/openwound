@@ -1,0 +1,113 @@
+task: sudoku-easy
+checkpoints:
+  generator: generator.pt
+  tokenizer: tokenizer.pt
+data:
+  test: puzzles.pickle
+  test_refs: solutions.pickle
+model:
+  n_layer: 8
+  n_head: 8
+  bias: true
+  dropout: 0.2
+  n_embd: 512
+  context_length: 180
+  vocab_size:
+  - 16
+  - 16
+  - 16
+  - 16
+  - 16
+  - 16
+  - 16
+  - 16
+  - 16
+  - 16
+  - 16
+  - 16
+  attn_pattern: block_diagonal
+  use_positional_encoding: true
+  use_level_encoding: true
+  prefix_len: 91
+  use_rope: true
+  rope_base: 10000
+  use_qk_norm: true
+  raw_token_prefix: true
+  query_level0: true
+  tie_heads_to_codebook: false
+tokenizer:
+  pre_tokenizer:
+    name: sudoku
+    tokenizer: sudoku
+  vqvae:
+    n_layers: 4
+    context_length: 89
+    embed_dim: 256
+    in_vocab_size: 12
+    vqvae_vocab_size:
+    - 16
+    - 16
+    - 16
+    - 16
+    - 16
+    - 16
+    - 16
+    - 16
+    - 16
+    - 16
+    - 16
+    - 16
+    compression_factor: 1
+    dropout: 0.3
+    dec_layers: 1
+    pre_quant_dropout: 0.0
+    pre_quant_groupnorm: 8
+    pre_quant_norm_type: group
+    use_qk_norm: true
+    vector_quantizer_config:
+      clss: multiscale_residual_vector_quantizer
+      decay: 0.99
+      epsilon: 1.0e-05
+      commitment_cost: 0.25
+      learned_l1_sampling: true
+      learned_all_sampling: false
+      quant_resi:
+        enabled: true
+        ratio: 0.5
+        share_mode: 0
+        learnable_ratio: false
+      levels:
+        use_manual_levels: true
+        manual_levels:
+        - 1
+        - 2
+        - 4
+        - 6
+        - 9
+        - 13
+        - 18
+        - 26
+        - 37
+        - 50
+        - 67
+        - 89
+      learned_l1_cascade: true
+      learned_l1_cascade_base: 4
+      learned_l1_cascade_norm: false
+      learned_l1_cascade_norm_final: false
+      aux:
+        fine_drop:
+          prob: 0.5
+          min_keep: 1
+    checkpoint_path: tokenizer.pt
+generation:
+  temperature: 0.0
+  top_k: 0
+  top_p: 1.0
+  cfg_scale: 0.0
+eval:
+  split: test
+  n_docs: 2000
+  batch_size: 128
+  n_shards: 2
+  metric: exact

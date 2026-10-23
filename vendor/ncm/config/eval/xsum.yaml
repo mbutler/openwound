@@ -1,0 +1,119 @@
+task: xsum
+checkpoints:
+  generator: generator.pt
+  tokenizer: tokenizer.pt
+data:
+  test: passages.pickle
+  test_refs: reference_summaries.pickle
+  validation: validation_cond512_le48.pickle
+model:
+  n_layer: 12
+  n_head: 12
+  bias: true
+  dropout: 0.3
+  n_embd: 768
+  context_length: 560
+  prefix_len: 512
+  raw_token_prefix: true
+  prefix_pad_token_id: 50257
+  vocab_size:
+  - 4096
+  - 4096
+  - 4096
+  - 4096
+  - 4096
+  - 4096
+  - 4096
+  - 4096
+  - 4096
+  predict_level0: false
+  attn_pattern: block_diagonal
+  use_positional_encoding: true
+  use_level_encoding: true
+  use_rope: true
+  rope_base: 100000
+  use_qk_norm: true
+  ctx_encoder:
+    enabled: false
+    n_layer: 4
+    vocab_size: 50304
+  use_flex_attention: false
+  query_level0: true
+  tie_heads_to_codebook: true
+  tie_heads_learn_scale: true
+tokenizer:
+  pre_tokenizer:
+    name: hf
+    tokenizer: hf
+    model_id: gpt2
+    special_tokens:
+      eos_token: <|endoftext|>
+      pad_token: <|pad|>
+  vqvae:
+    n_layers: 6
+    embed_dim: 384
+    in_vocab_size: 50304
+    context_length: 48
+    compression_factor: 1
+    dropout: 0.1
+    pre_quant_groupnorm: 8
+    use_qk_norm: true
+    pre_quant_dropout: 0.25
+    vqvae_vocab_size:
+    - 4096
+    - 4096
+    - 4096
+    - 4096
+    - 4096
+    - 4096
+    - 4096
+    - 4096
+    - 4096
+    checkpoint_path: tokenizer.pt
+    vector_quantizer_config:
+      clss: multiscale_residual_vector_quantizer
+      decay: 0.99
+      epsilon: 1.0e-05
+      commitment_cost: 0.25
+      learned_l1_sampling: true
+      learned_l1_cascade: true
+      learned_l1_cascade_base: 4
+      learned_all_sampling: false
+      quant_resi:
+        enabled: true
+        ratio: 0.5
+        share_mode: 0
+        learnable_ratio: false
+      aux:
+        fine_drop:
+          prob: 0.5
+          min_keep: 1
+      levels:
+        use_manual_levels: true
+        manual_levels:
+        - 4
+        - 6
+        - 10
+        - 14
+        - 20
+        - 26
+        - 32
+        - 40
+        - 48
+      learned_l1_cascade_norm: true
+      learned_l1_cascade_norm_final: true
+generation:
+  temperature: 1.0
+  top_k: 1
+  top_p: 0.0
+  cfg_scale: 0.0
+  frequency_penalty: 2.0
+  frequency_deficit: 1.0
+  adjacency_penalty: 5,4,0.5
+  frequency_allowance: generator.pt:inference.token_unigram
+eval:
+  split: test
+  n_docs: 11334
+  batch_size: 32
+  n_shards: 2
+  metric: rouge
