@@ -286,6 +286,8 @@ def _history_line(event: dict) -> str:
         return "Chose a current place for a held name."
     if action == "repair":
         return f"Adopted a repair. “{detail.get('omitted_text', '')}” became “{detail.get('replacement_text', '')}”."
+    if action == "heal":
+        return f"Healed around the protected span “{detail.get('donor_text', '')}”."
     return action
 
 

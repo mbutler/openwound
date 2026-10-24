@@ -123,6 +123,7 @@ function eventLabel(action: string, detail: Record<string, unknown>): string {
   if (action === "reorder") return "Reordered the entries.";
   if (action === "retarget") return "Chose a current place for a held name.";
   if (action === "repair") return `Adopted a repair. “${detail.omitted_text}” became “${detail.replacement_text}”.`;
+  if (action === "heal") return `Healed around the protected span “${detail.donor_text}”.`;
   return action;
 }
 
@@ -158,6 +159,17 @@ export function Work({
   const [repairJob, setRepairJob] = useState<string | null>(null);
   const [repairProgress, setRepairProgress] = useState("");
   const [releaseRepair, setReleaseRepair] = useState(false);
+  const [healEntryId, setHealEntryId] = useState<string | null>(null);
+  const [healNeedle, setHealNeedle] = useState("");
+  const [healMarks, setHealMarks] = useState<{ start: number; end: number }[]>([]);
+  const [healMark, setHealMark] = useState<{ start: number; end: number } | null>(null);
+  const [hostNeedle, setHostNeedle] = useState("");
+  const [hostMarks, setHostMarks] = useState<{ start: number; end: number }[]>([]);
+  const [hostMark, setHostMark] = useState<{ start: number; end: number } | null>(null);
+  const [healCount, setHealCount] = useState(3);
+  const [healJob, setHealJob] = useState<string | null>(null);
+  const [healProgress, setHealProgress] = useState("");
+  const [releaseHeal, setReleaseHeal] = useState(false);
   const [appendix, setAppendix] = useState(false);
   const [drafts, setDrafts] = useState<Record<string, string>>({});
   const [edits, setEdits] = useState<Record<string, string>>({});
@@ -231,6 +243,33 @@ export function Work({
     }, 1000);
     return () => window.clearInterval(timer);
   }, [projectId, workId, repairJob]);
+
+  useEffect(() => {
+    if (!projectId || !workId || !healJob) return;
+    const timer = window.setInterval(() => {
+      void api<{ state: string; progress: { stage?: string }; error: { message?: string } | null; result: { preview_ids?: string[] } | null }>(
+        `/api/v1/jobs/${healJob}`,
+      )
+        .then(async (job) => {
+          if (job.state === "queued" || job.state === "running") {
+            setHealProgress(job.progress.stage ? `${job.progress.stage}.` : "Preparing a healing.");
+            return;
+          }
+          setHealJob(null);
+          setHealProgress("");
+          const loaded = await api<WorkRecord>(`/api/v1/projects/${projectId}/works/${workId}`);
+          setWork(loaded);
+          onEntries?.(loaded.entries);
+          const prepared = loaded.previews.find((item) => job.result?.preview_ids?.includes(item.id));
+          if (prepared) setPreview(prepared);
+          if (job.state !== "succeeded" && job.state !== "cancelled") {
+            setError(job.error?.message || "The healing was not prepared.");
+          }
+        })
+        .catch((reason: Error) => setError(reason.message));
+    }, 1000);
+    return () => window.clearInterval(timer);
+  }, [projectId, workId, healJob]);
 
   function fail(reason: unknown) {
     setError(reason instanceof Error ? reason.message : "The work could not be changed.");
@@ -329,6 +368,52 @@ export function Work({
     });
     setRepairProgress("Preparing a repair.");
     setRepairJob(queued.id);
+  }
+
+  function showHealing(event: FormEvent) {
+    event.preventDefault();
+    const entry = work?.entries.find((item) => item.id === healEntryId);
+    if (!entry) return;
+    const donors = findIn(entry.text, healNeedle);
+    const hosts = hostNeedle ? findIn(entry.text, hostNeedle) : [];
+    setHealMarks(donors);
+    setHealMark(donors.length === 1 ? donors[0] : null);
+    setHostMarks(hosts);
+    setHostMark(hosts.length === 1 ? hosts[0] : null);
+    setError(donors.length ? "" : "That span is not in this entry.");
+  }
+
+  async function prepareHealing() {
+    if (!projectId || !work || !healEntryId || !healMark) return;
+    const entry = work.entries.find((item) => item.id === healEntryId);
+    if (!entry) return;
+    if (hostMark && (healMark.start < hostMark.start || healMark.end > hostMark.end)) {
+      setError("The protected span has to sit inside the rewritten region.");
+      return;
+    }
+    setError("");
+    const donor = byteSpan(entry.text, healMark.start, healMark.end, 0);
+    const host = hostMark
+      ? byteSpan(entry.text, hostMark.start, hostMark.end, 0)
+      : { start_byte: 0, end_byte: new TextEncoder().encode(entry.text).length };
+    const queued = await api<{ id: string }>(`/api/v1/projects/${projectId}/works/${work.id}/healings`, {
+      method: "POST",
+      body: JSON.stringify({
+        client_request_id: crypto.randomUUID(),
+        passage_revision_id: entry.revision_id,
+        host,
+        donor,
+        destination: {
+          kind: "replace_entry",
+          entry_id: entry.id,
+          expected_revision_id: entry.revision_id,
+        },
+        candidate_count: healCount,
+        release_protection: releaseHeal,
+      }),
+    });
+    setHealProgress("Preparing a healing.");
+    setHealJob(queued.id);
   }
 
   async function download(path: string, filename: string, init?: RequestInit) {
@@ -489,6 +574,7 @@ export function Work({
   const active = work?.entries.filter((entry) => !entry.removed) ?? [];
   const removed = work?.entries.filter((entry) => entry.removed) ?? [];
   const repairEntry = active.find((entry) => entry.id === repairEntryId) ?? null;
+  const healEntry = active.find((entry) => entry.id === healEntryId) ?? null;
 
   return (
     <section className="work-panel" aria-label="Work">
@@ -563,6 +649,21 @@ export function Work({
                   }}
                 >
                   Mark an omission
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setHealEntryId(entry.id);
+                    setHealMarks([]);
+                    setHealMark(null);
+                    setHealNeedle("");
+                    setHostMarks([]);
+                    setHostMark(null);
+                    setHostNeedle("");
+                    setReleaseHeal(false);
+                  }}
+                >
+                  Heal around a protected span
                 </button>
               </p>
               <details>
@@ -690,6 +791,66 @@ export function Work({
               {repairProgress && <p className="legend">{repairProgress}</p>}
             </form>
           )}
+          {healEntry && (
+            <form onSubmit={showHealing} aria-label="Protected host healing">
+              <h3>Heal around a protected span</h3>
+              <p className="prose">{healEntry.text}</p>
+              <p>
+                The model rewrites the surroundings and does not see the marked span. The server puts that span back unchanged. The name rule does not apply.
+              </p>
+              <label>
+                Mark the protected span
+                <input value={healNeedle} onChange={(event) => setHealNeedle(event.target.value)} />
+              </label>
+              <label>
+                Rewritten region, or leave this blank to use the whole entry
+                <input value={hostNeedle} onChange={(event) => setHostNeedle(event.target.value)} />
+              </label>
+              <button type="submit">Show occurrences</button>
+              {healMarks.map((item) => (
+                <button
+                  type="button"
+                  key={`donor-${item.start}-${item.end}`}
+                  aria-pressed={healMark === item}
+                  onClick={() => setHealMark(item)}
+                >
+                  Protect “{healEntry.text.slice(item.start, item.end)}” at this place
+                </button>
+              ))}
+              {hostMarks.map((item) => (
+                <button
+                  type="button"
+                  key={`host-${item.start}-${item.end}`}
+                  aria-pressed={hostMark === item}
+                  onClick={() => setHostMark(item)}
+                >
+                  Rewrite “{healEntry.text.slice(item.start, item.end)}” at this place
+                </button>
+              ))}
+              <label>
+                Healings to prepare
+                <input
+                  type="number"
+                  min={1}
+                  max={8}
+                  value={healCount}
+                  onChange={(event) => setHealCount(Number(event.target.value))}
+                />
+              </label>
+              {healEntry.protected.length > 0 && (
+                <label>
+                  <input type="checkbox" checked={releaseHeal} onChange={(event) => setReleaseHeal(event.target.checked)} />
+                  Release protection on this entry
+                </label>
+              )}
+              <p>
+                <button type="button" onClick={() => void prepareHealing().catch(fail)} disabled={!healMark || Boolean(healJob)}>
+                  Prepare healing
+                </button>
+              </p>
+              {healProgress && <p className="legend">{healProgress}</p>}
+            </form>
+          )}
           {donor && (
             <form onSubmit={showMarks}>
               <h3>Transfer the selected passage</h3>
@@ -732,6 +893,11 @@ export function Work({
               {preview.operation === "omit_and_repair_v1" && (
                 <p>
                   The model proposed this replacement for the marked omission. The name rule does not apply. The surrounding bytes were not rewritten.
+                </p>
+              )}
+              {preview.operation === "heal_around_protected_graft_v1" && (
+                <p>
+                  The marked span stayed exact. The model wrote only the surroundings and did not see that span. The name rule does not apply.
                 </p>
               )}
               {preview.provider_window && <p className="legend">The model saw: {preview.provider_window}</p>}

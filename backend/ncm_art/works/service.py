@@ -18,6 +18,13 @@ from ncm_art.influences.preset import (
     conflicting_protection,
     validate_definition,
 )
+from ncm_art.operations.healing import (
+    PROMPT_VERSION as HEAL_PROMPT_VERSION,
+    assemble_healing,
+    provider_surroundings,
+    surroundings_conflict,
+    validate_healing_spans,
+)
 from ncm_art.operations.omission import GAP_MARKER, PROMPT_VERSION, assemble_repair, provider_window
 from ncm_art.operations.text import assemble, overlaps, plan_protections, splice
 from ncm_art.storage.errors import ProjectError
@@ -26,6 +33,7 @@ TRANSFER = "transfer_fragment_v1"
 PROTECTED = "protected_insert_v1"
 RETURN = "return_held_name_v1"
 REPAIR = "omit_and_repair_v1"
+HEAL = "heal_around_protected_graft_v1"
 OPERATION_VERSION = "1"
 
 STALE = "The work changed after this preview. Prepare it again. The current work was kept."
@@ -766,6 +774,170 @@ def queue_omission_repair(
     return project.submit_job("omit_repair", recipe, client_request_id)
 
 
+def queue_healing(
+    project,
+    library_root,
+    work_id: str,
+    passage_revision_id: str,
+    host: dict,
+    donor: dict,
+    destination: dict,
+    client_request_id: str,
+    candidate_count: int = 3,
+    release_protection: bool = False,
+) -> dict:
+    """Validate the host and donor, then queue a provider job. The work stays unchanged."""
+    from ncm_art.providers.instruction import load_profile
+
+    profile = load_profile(library_root)
+    if profile is None:
+        raise ProjectError(
+            "CAPABILITY_UNAVAILABLE",
+            "No instruction provider is configured. Import, transfer, and returning a name still work.",
+            status=503,
+        )
+    if isinstance(candidate_count, bool) or not isinstance(candidate_count, int) or not 1 <= candidate_count <= 8:
+        raise ProjectError("INVALID_TEXT", "Ask for one to eight healings.", {"candidate_count": candidate_count})
+    host_start = _whole(host.get("start_byte"), "The rewritten region is not a byte offset.")
+    host_end = _whole(host.get("end_byte"), "The rewritten region is not a byte offset.")
+    donor_start = _whole(donor.get("start_byte"), "The protected span is not a byte offset.")
+    donor_end = _whole(donor.get("end_byte"), "The protected span is not a byte offset.")
+    with project.immediate_transaction() as conn:
+        work = _lock_work(conn, work_id)
+        raw, _source = _revision_bytes(conn, project, passage_revision_id)
+        validate_healing_spans(raw, host_start, host_end, donor_start, donor_end)
+        provider_surroundings(raw, host_start, host_end, donor_start, donor_end)
+        if not release_protection:
+            _refuse_healing_conflict(conn, passage_revision_id, host_start, donor_start, donor_end, host_end)
+        binding = _active_binding(conn, work)
+        chosen = _heal_destination(conn, work_id, destination, passage_revision_id)
+        recipe = {
+            "work_id": work_id,
+            "passage_revision_id": passage_revision_id,
+            "host": {"start_byte": host_start, "end_byte": host_end},
+            "donor": {"start_byte": donor_start, "end_byte": donor_end},
+            "destination": chosen,
+            "candidate_count": candidate_count,
+            "release_protection": bool(release_protection),
+            "expected_work_state_version": work["state_version"],
+            "binding_id": None if binding is None else binding["id"],
+            "influence_version_id": None if binding is None else binding["influence_version_id"],
+            "prompt_version": HEAL_PROMPT_VERSION,
+        }
+    return project.submit_job("heal_graft", recipe, client_request_id)
+
+
+def record_healing_candidate(project, recipe: dict, before: str, after: str, provider_call: dict) -> str:
+    """Store one prepared healing. The donor bytes are copied by the server, and the work version stays put."""
+    now = _now()
+    with project.immediate_transaction() as conn:
+        work = _lock_work(conn, recipe["work_id"])
+        raw, source_id = _revision_bytes(conn, project, recipe["passage_revision_id"])
+        host = recipe["host"]
+        donor = recipe["donor"]
+        window = provider_surroundings(
+            raw, host["start_byte"], host["end_byte"], donor["start_byte"], donor["end_byte"]
+        )
+        if not recipe["release_protection"]:
+            _refuse_healing_conflict(
+                conn,
+                recipe["passage_revision_id"],
+                host["start_byte"],
+                donor["start_byte"],
+                donor["end_byte"],
+                host["end_byte"],
+            )
+        before_bytes = before.encode("utf-8")
+        after_bytes = after.encode("utf-8")
+        final, placed_start, placed_end = assemble_healing(
+            raw,
+            host["start_byte"],
+            host["end_byte"],
+            donor["start_byte"],
+            donor["end_byte"],
+            before_bytes,
+            after_bytes,
+        )
+        donor_text = raw[donor["start_byte"] : donor["end_byte"]].decode("utf-8")
+        protections = _protection_rows(conn, recipe["passage_revision_id"])
+        carried = plan_protections(raw, final, protections, bool(recipe["release_protection"]))
+        donor_range = {
+            "start_byte": placed_start,
+            "end_byte": placed_end,
+            "slice_sha256": hashlib.sha256(final[placed_start:placed_end]).hexdigest(),
+            "role": "donor",
+        }
+        if not any(item["start_byte"] == placed_start and item["end_byte"] == placed_end for item in carried):
+            carried.append(donor_range)
+        base_id = _insert_candidate(project, conn, raw.decode("utf-8"), source_id, now)
+        final_id = _insert_candidate(project, conn, final.decode("utf-8"), source_id, now)
+        _insert_protections(conn, final_id, carried, now)
+        binding = None
+        if recipe.get("binding_id"):
+            binding = {"id": recipe["binding_id"], "influence_version_id": recipe.get("influence_version_id")}
+        return _insert_preview(
+            conn,
+            work=work,
+            binding=binding,
+            operation=HEAL,
+            request={
+                "passage_revision_id": recipe["passage_revision_id"],
+                "host": host,
+                "donor": donor,
+                "donor_text": donor_text,
+                "provider_window": window,
+                "before": before,
+                "after": after,
+                "prompt_version": recipe.get("prompt_version"),
+                "provider_call": provider_call,
+                "release_protection": bool(recipe["release_protection"]),
+            },
+            base_id=base_id,
+            final_id=final_id,
+            destination=recipe["destination"],
+            effects=[
+                {
+                    "kind": "protected_range",
+                    "start_byte": placed_start,
+                    "end_byte": placed_end,
+                    "text": donor_text,
+                }
+            ],
+            now=now,
+            state_version=recipe["expected_work_state_version"],
+        )
+
+
+def _refuse_healing_conflict(conn, revision_id: str, host_start: int, donor_start: int, donor_end: int, host_end: int) -> None:
+    for protection in _protection_rows(conn, revision_id):
+        if surroundings_conflict(
+            protection["start_byte"], protection["end_byte"], host_start, donor_start, donor_end, host_end
+        ):
+            raise ProjectError(
+                "PROTECTED_RANGE",
+                "That healing would change a protected passage. Release the protection to continue.",
+                status=409,
+            )
+
+
+def _heal_destination(conn, work_id: str, destination: dict, passage_revision_id: str) -> dict:
+    kind = destination.get("kind") if isinstance(destination, dict) else None
+    if kind != "replace_entry":
+        raise ProjectError("INVALID_DESTINATION", "Healing replaces the entry that holds the protected span.")
+    entry = _live_entry(conn, work_id, destination.get("entry_id"))
+    if destination.get("expected_revision_id") != entry["passage_revision_id"]:
+        raise ProjectError("STALE_TARGET", STALE_ENTRY, status=409)
+    if passage_revision_id != entry["passage_revision_id"]:
+        raise ProjectError("INVALID_DESTINATION", "Healing has to start from the entry's current passage.")
+    return {
+        "kind": "replace_entry",
+        "position": None,
+        "entry_id": entry["id"],
+        "expected_revision_id": entry["passage_revision_id"],
+        "label": "Adopt this healing",
+    }
+
+
 def record_repair_candidate(project, recipe: dict, replacement: str, provider_call: dict) -> str:
     """Store one prepared repair. The name rule does not apply, and the work version stays put."""
     now = _now()
@@ -904,6 +1076,10 @@ def _commit_new(project, conn, work_id, client_request_id, preview_id, candidate
     elif preview["operation"] == REPAIR:
         entry_id, held_ids, event_id = _commit_repair(
             project, conn, work, preview, request, effects, destination, receipt_id, now
+        )
+    elif preview["operation"] == HEAL:
+        entry_id, held_ids, event_id = _commit_healing(
+            project, conn, work, preview, request, effects, destination, final, receipt_id, now
         )
     else:
         raise ProjectError("UNSUPPORTED_TEMPLATE", "That operation is not available.")
@@ -1208,6 +1384,141 @@ def _commit_repair(project, conn, work, preview, request, effects, destination, 
     return entry_id, [], event_id
 
 
+def _commit_healing(project, conn, work, preview, request, effects, destination, final, receipt_id, now):
+    if any(effect["kind"] == "held_name" for effect in effects):
+        raise ProjectError("RULE_CONFLICT", "Healing does not withhold a name.", status=409)
+    if destination["kind"] != "replace_entry":
+        raise ProjectError("INVALID_DESTINATION", "Healing replaces the entry that holds the protected span.")
+    entry = _live_entry(conn, work["id"], destination["entry_id"])
+    if entry["passage_revision_id"] != destination["expected_revision_id"]:
+        raise ProjectError("STALE_TARGET", STALE_ENTRY, status=409)
+    _require_ranges(conn, project, preview["final_revision_id"])
+    old_revision = entry["passage_revision_id"]
+    conn.execute(
+        "UPDATE work_entry SET passage_revision_id=? WHERE id=?",
+        (preview["final_revision_id"], entry["id"]),
+    )
+    host = request["host"]
+    donor = request["donor"]
+    before_delta = len(request["before"].encode("utf-8")) - (donor["start_byte"] - host["start_byte"])
+    after_delta = len(request["after"].encode("utf-8")) - (host["end_byte"] - donor["end_byte"])
+    _rebase_healed_names(
+        conn,
+        entry["id"],
+        old_revision,
+        preview["final_revision_id"],
+        host["start_byte"],
+        donor["start_byte"],
+        donor["end_byte"],
+        host["end_byte"],
+        before_delta,
+        after_delta,
+        now,
+    )
+    event_id = _event(
+        conn,
+        work["id"],
+        "heal",
+        work["state_version"],
+        work["state_version"] + 1,
+        {
+            "operation": HEAL,
+            "entry_id": entry["id"],
+            "revision_id": preview["final_revision_id"],
+            "base_revision_id": preview["base_revision_id"],
+            "passage_revision_id": request["passage_revision_id"],
+            "donor_text": request.get("donor_text"),
+            "before": request.get("before"),
+            "after": request.get("after"),
+            "provider_window": request.get("provider_window"),
+        },
+        now,
+        preview_id=preview["id"],
+        receipt_id=receipt_id,
+    )
+    _derive(
+        project,
+        conn,
+        preview["final_revision_id"],
+        request,
+        HEAL,
+        now,
+        [(request["passage_revision_id"], "healed_from")],
+    )
+    _ = final
+    return entry["id"], [], event_id
+
+
+def _rebase_healed_names(
+    conn,
+    entry_id,
+    old_revision_id,
+    new_revision_id,
+    host_start,
+    donor_start,
+    donor_end,
+    host_end,
+    before_delta,
+    after_delta,
+    now,
+) -> None:
+    rows = conn.execute(
+        "SELECT * FROM held_name WHERE entry_id=? AND status='held'",
+        (entry_id,),
+    ).fetchall()
+    for row in rows:
+        if row["target_state"] != "resolved" or row["receiving_revision_id"] != old_revision_id:
+            _unresolve(conn, row["id"], now)
+            continue
+        placeholder = _shift_pair(
+            row["placeholder_start"],
+            row["placeholder_end"],
+            host_start,
+            donor_start,
+            donor_end,
+            host_end,
+            before_delta,
+            after_delta,
+        )
+        target = None
+        if row["target_start"] is not None:
+            target = _shift_pair(
+                row["target_start"],
+                row["target_end"],
+                host_start,
+                donor_start,
+                donor_end,
+                host_end,
+                before_delta,
+                after_delta,
+            )
+        if placeholder is None or target is None and row["target_start"] is not None:
+            _unresolve(conn, row["id"], now)
+            continue
+        conn.execute(
+            """UPDATE held_name
+               SET receiving_revision_id=?, placeholder_start=?, placeholder_end=?,
+                   target_start=?, target_end=?, updated_at=?
+               WHERE id=?""",
+            (
+                new_revision_id,
+                placeholder[0],
+                placeholder[1],
+                None if target is None else target[0],
+                None if target is None else target[1],
+                now,
+                row["id"],
+            ),
+        )
+
+
+def _shift_pair(start, end, host_start, donor_start, donor_end, host_end, before_delta, after_delta):
+    first = _shift(start, end, host_start, donor_start, before_delta)
+    if first is None:
+        return None
+    return _shift(first[0], first[1], donor_end + before_delta, host_end + before_delta, after_delta)
+
+
 def _repair_destination(conn, work_id: str, destination: dict, passage_revision_id: str) -> dict:
     kind = destination.get("kind") if isinstance(destination, dict) else None
     if kind == "insert_entry":
@@ -1378,11 +1689,16 @@ def _require_effect_bytes(final: bytes, effects: list[dict]) -> None:
             start = effect["replacement_start"]
             if final[start : start + len(replacement)] != replacement:
                 raise ProjectError("SPAN_MISMATCH", "The repair is not in this candidate.", status=409)
+        if effect["kind"] == "protected_range":
+            start = effect["start_byte"]
+            end = effect["end_byte"]
+            if final[start:end] != effect["text"].encode("utf-8"):
+                raise ProjectError("SPAN_MISMATCH", "The protected span is not in this candidate.", status=409)
 
 
 def _require_saved_inputs(project, conn, request: dict) -> None:
     donor = request.get("donor")
-    if donor:
+    if donor and donor.get("owner_kind"):
         _donor(project, donor)
     host_id = request.get("host_revision_id")
     if host_id:
@@ -1558,7 +1874,7 @@ def _preview_payload(project, conn, row) -> dict:
             binding["influence_version_id"] = version["id"]
     applies = any(effect["kind"] == "held_name" for effect in effects)
     donor_text = None
-    if request.get("donor"):
+    if request.get("donor") and request["donor"].get("owner_kind"):
         donor_text = _owner_bytes(project, request["donor"]["owner_kind"], request["donor"]["owner_id"])[
             request["donor"]["start_byte"] : request["donor"]["end_byte"]
         ].decode("utf-8")

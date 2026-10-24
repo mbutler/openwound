@@ -19,6 +19,7 @@ from ncm_art.works.service import (
     preview_protected_insert,
     preview_return,
     preview_transfer,
+    queue_healing,
     queue_omission_repair,
     reject_preview,
     remove_entry,
@@ -122,6 +123,16 @@ class DestinationBody(BaseModel):
     position: int | None = None
     entry_id: str | None = None
     expected_revision_id: str | None = None
+
+
+class HealingBody(BaseModel):
+    client_request_id: str
+    passage_revision_id: str
+    host: MarkBody
+    donor: MarkBody
+    destination: DestinationBody
+    candidate_count: int = 3
+    release_protection: bool = False
 
 
 class RepairBody(BaseModel):
@@ -276,6 +287,22 @@ def register(application, library) -> None:
             body.passage_revision_id,
             body.omission.model_dump(),
             body.context.model_dump(),
+            body.destination.model_dump(),
+            body.client_request_id,
+            body.candidate_count,
+            body.release_protection,
+        )
+        return JSONResponse(status_code=202, content=job)
+
+    @application.post("/api/v1/projects/{project_id}/works/{work_id}/healings")
+    def healing(project_id: str, work_id: str, body: HealingBody):
+        job = queue_healing(
+            project_for(project_id),
+            library.root,
+            work_id,
+            body.passage_revision_id,
+            body.host.model_dump(),
+            body.donor.model_dump(),
             body.destination.model_dump(),
             body.client_request_id,
             body.candidate_count,

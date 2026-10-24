@@ -79,6 +79,16 @@ def dispatch_job(project, job: dict, load_ncm, library_root=None) -> None:
         except Exception as error:
             project.fail(job["id"], "JOB_FAILED", str(error))
         return
+    if job["operation"] == "heal_graft":
+        from ncm_art.providers.healing_job import execute_healing
+
+        try:
+            execute_healing(project, job, library_root)
+        except ProjectError as error:
+            project.fail(job["id"], error.code, error.message, error.details)
+        except Exception as error:
+            project.fail(job["id"], "JOB_FAILED", str(error))
+        return
     try:
         project.ensure_current()
         bundle = None

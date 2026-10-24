@@ -672,6 +672,7 @@ class Project:
         assign_seed = operation == "variants" and "base_seed" not in stored
         assign_graft_seed = operation == "latent_graft" and "seed" not in stored
         assign_repair_seeds = operation == "omit_repair" and "seeds" not in stored
+        assign_healing_seeds = operation == "heal_graft" and "seeds" not in stored
         digest = _request_hash(stored)
         with self._conn() as conn:
             conn.execute("BEGIN IMMEDIATE")
@@ -704,10 +705,11 @@ class Project:
                 stored["base_seed"] = secrets.randbelow(0x100000000)
             if assign_graft_seed:
                 stored["seed"] = secrets.randbelow(0x100000000)
-            if assign_repair_seeds:
+            if assign_repair_seeds or assign_healing_seeds:
                 count = stored.get("candidate_count")
+                label = "healings" if assign_healing_seeds else "repairs"
                 if isinstance(count, bool) or not isinstance(count, int) or not 1 <= count <= 8:
-                    raise ProjectError("INVALID_TEXT", "Ask for one to eight repairs.", {"candidate_count": count})
+                    raise ProjectError("INVALID_TEXT", f"Ask for one to eight {label}.", {"candidate_count": count})
                 stored["seeds"] = [secrets.randbelow(0x100000000) for _ in range(count)]
             conn.execute(
                 """INSERT INTO job(id, client_request_id, request_hash, operation, request_json, state,

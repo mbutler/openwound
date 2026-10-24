@@ -1,6 +1,6 @@
 # Continuation
 
-Increment E is in place. Saved NCM codes can be compared at a chosen prefix, and a latent graft can replace codes without copying a phrase. The governing contract is `openwound-v4-correspondences-build-spec.md`. Increments A–D remain the Correspondences release.
+Increment F has one operator: protected host healing. The model rewrites the surroundings of a marked span, and the server puts that span back unchanged. The governing contract is `openwound-v4-correspondences-build-spec.md`. Increments A–D remain the Correspondences release.
 
 ## Completed
 
@@ -12,10 +12,11 @@ Increment E is in place. Saved NCM codes can be compared at a chosen prefix, and
 - An omission repair asks only for the marked span. The provider sees the declared window with that one occurrence replaced by `_____`. Adopting a repair uses the same commit as a transfer, and the name rule does not apply.
 - A readable export can include an appendix. A project archive imports as a new project. Unfinished jobs are marked interrupted and are not replayed. Embeddings and credentials stay out of the archive.
 - Format 5 adds saved code comparisons. Slot agreement uses equal code slots. A length band of 16 unpadded tokens supplies the common-code baseline. A latent graft keeps the retained prefix and regenerates after it.
+- Protected host healing, `heal_around_protected_graft_v1`, asks an instruction provider only for the text before and after a marked span. The span is copied back by the server and kept as a protected range. Adopting it uses the existing commit. The name rule does not apply.
 
 ## Next
 
-Increment F is the next operator chosen from use. Do not start healing, role inversion, or register translation until a session asks for one of them.
+Role inversion and register translation are still open. A broader tokenizer is not justified by the passages compared so far. Do not start either until a session asks.
 
 ## Invariants
 
@@ -27,6 +28,6 @@ Increment F is the next operator chosen from use. Do not start healing, role inv
 
 ## Blockers
 
-No instruction provider is configured on this machine. Import, transfer, returning a name, and reopening an imported project work without one. A live repair, with the actual request and the model's replacement, has not been recorded.
+No instruction provider is configured on this machine. Import, transfer, returning a name, healing around a span, and reopening an imported project work without one. A live repair and a live healing, with the actual request and the model's text, have not been recorded.
 
 A live TinyStories comparison was recorded. Two short passages, 8 tokens and 7 tokens, agreed on 0.160 of the slots in the first three levels and on none of the slots in the first level. The length band was too small for a baseline adjustment. A latent graft of that pair regenerated a passage and left the work and the desk draft unchanged. Pair reconstruction of that same pair was not run.
