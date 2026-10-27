@@ -1,8 +1,14 @@
 # Continuation
 
-Increment F has one operator: protected host healing. The model rewrites the surroundings of a marked span, and the server puts that span back unchanged. The governing contract is `openwound-v4-correspondences-build-spec.md`. Increments A–D remain the Correspondences release.
+The current cycle is the live instrument. The desk's job queue was built for slow inference; on this machine a trace or a variation takes well under a second, so the Instrument and Memory Weather call the model directly and keep nothing until asked. Increment F (protected host healing) and the Correspondences release are unchanged and live under the Archive place.
 
 ## Completed
+
+- The live engine (`live/engine.py`) loads TinyStories lazily in the API process under one lock. `POST /api/v1/live/trace` returns the codes and all twelve readings; `POST /api/v1/live/vary` keeps a prefix and samples the rest, from saved codes or from text. Neither writes to the project.
+- Keeping is the only write. `live/keep` commits the source revision, its encoding, and the variation's sampled hierarchy through the same records the job path uses. `live/keep-frame` commits one reading as `decoded_from`. `live/keep-run` commits a Memory Weather run as a chain, each telling `generated_from` the telling before it, with a cut telling recorded as its own `trimmed_from` revision.
+- The Instrument screen: passage with a token gauge, the twelve passes drawn as a band of code cells, one Keep dial from 0 through 12, the twelve readings, and the live variation with a word diff. Reconstruction frames are no longer written to history on every run.
+- Memory Weather: a finite run driven from the browser, a return-to-source interval, and an explicit overflow policy (cut to the window, or stop). Each telling is shown as it arrives.
+- A first-run explainer that uses the artist's own trace. Correspondences, works, repair, healing, and comparison are reached through Archive and are not changed.
 
 - Format 4 opens an older project through the format-3 backup and adds works, influences, previews, receipts, held names, and protected ranges.
 - Ordinary transfer copies a donor span into a chosen position. With `withhold_marked_span_v1` bound, only the marked occurrence becomes `_____`, and that name is indexed.
@@ -16,7 +22,7 @@ Increment F has one operator: protected host healing. The model rewrites the sur
 
 ## Next
 
-Role inversion and register translation are still open. A broader tokenizer is not justified by the passages compared so far. Do not start either until a session asks.
+Local code substitution: click one cell in the band to replace that code with a codebook neighbour at the same level, or resample it from the generator's own conditional, then regenerate the passes below. This is v3's word-vector substitution carried over to codebook vectors. Role inversion and register translation are still open. A broader tokenizer is not justified by the passages compared so far.
 
 ## Invariants
 

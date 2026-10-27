@@ -21,15 +21,15 @@ v2 carries the same method as v1. It is a separate version because the program w
 
 v4 is a local studio for writing with the released Next-Concept Modeling TinyStories model. The requirements are in `ncm_art_studio_openwound_v4_technical_spec.md`. The pinned research code is in `vendor/ncm` at commit `c702742`. A passage is encoded as a twelve-level residual hierarchy, reconstructed level by level, and varied by keeping a prefix of those codes. A random short model with the released architectural flags passes that contract in `tests/adapter`. The released TinyStories checkpoint also loads. A CPU smoke record is in `fixtures/recorded/tinystories-cpu-fp32-eager-v1.json`.
 
-The writing desk is the interface for that work. It creates and reopens a project, counts BPE tokens, reconstructs all twelve levels, and asks for four variations. Adopting a result, editing it, and returning to the original are separate steps, and each saved passage keeps its provenance. From the repository root, with the environment in `.venv` and the desk built in `frontend/dist`:
+The Instrument is the interface for that work. Write or paste a passage, and the model reads it as it settles: the twelve passes are drawn as a band of code cells, the twelve readings appear below, and one dial, Keep, chooses how many passes stay fixed while the rest are sampled. The variation changes under the dial in well under a second on a CPU. Nothing is written until you keep it; a kept variation records the exact encoding, the sampled hierarchy, the seed, and its parent. Memory Weather tells the passage again a finite number of times, each telling becoming the next passage, and shows how much of the source survives. A kept run is a chain of revisions. From the repository root, with the environment in `.venv` and the interface built in `frontend/dist`:
 
 ```
 .venv/bin/python -m ncm_art.cli serve
 ```
 
-That listens on `127.0.0.1:8765` and starts the worker. The worker stays up when the TinyStories checkpoint is missing; encoding and variation load it when a job asks. Opening a project, the draft, and saved history do not load the model. `.venv/bin/python -m ncm_art.cli doctor` checks the pinned model files first.
+That listens on `127.0.0.1:8765`. The API process loads TinyStories the first time the Instrument asks, which takes a few seconds. It also starts the worker for the slower jobs under Archive; that worker stays up when the checkpoint is missing. `.venv/bin/python -m ncm_art.cli doctor` checks the pinned model files first. To rebuild the interface, run `npm run build` in `frontend`.
 
-The header also opens Correspondences. Import a UTF-8 `.txt` or `.md` file, or paste text. The original bytes are kept, and paragraphs can be read with the passages around them. Shared-word search works with no model. Related meaning uses the pinned MiniLM embedding model:
+Archive holds Correspondences. Import a UTF-8 `.txt` or `.md` file, or paste text. The original bytes are kept, and paragraphs can be read with the passages around them. Shared-word search works with no model. Related meaning uses the pinned MiniLM embedding model:
 
 ```
 .venv/bin/python -m ncm_art.cli models install minilm-l6-v2

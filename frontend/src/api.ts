@@ -93,9 +93,66 @@ export type Status = {
     ncm?: { profile: string; state: string; message: string | null };
     embedding?: { profile: string; state: string; message: string | null };
   };
+  live?: LiveState;
   model_profile: string;
   execution_profile: string;
 };
+
+export type LiveState = { profile: string; state: "unloaded" | "ready" | "unavailable"; message: string | null };
+
+export type Layout = {
+  levels: number[];
+  codebook_sizes: number[];
+  text_length: number;
+  model_profile: string;
+  execution_profile: string;
+  display_policy: string;
+};
+
+export type TraceFrame = { level: number; text: string; raw_token_ids: number[] };
+
+export type Trace = Layout & {
+  text: string;
+  token_count: number;
+  padded_token_ids: number[];
+  codes: number[];
+  frames: TraceFrame[];
+  ms: number;
+};
+
+export type Variation = {
+  text: string;
+  codes: number[];
+  raw_token_ids: number[];
+  changed: string;
+  keep: number;
+  seed: number;
+  prediction_count: number;
+  sampling: { temperature: number; top_k: number; top_p: number };
+  source_codes: number[];
+  source_text: string | null;
+  source_token_count: number | null;
+  source_padded_token_ids: number[] | null;
+  trimmed: boolean;
+  ms: number;
+};
+
+export function randomSeed(): number {
+  const buffer = new Uint32Array(1);
+  crypto.getRandomValues(buffer);
+  return buffer[0];
+}
+
+export function variationBody(variation: Variation) {
+  return {
+    text: variation.text,
+    codes: variation.codes,
+    raw_token_ids: variation.raw_token_ids,
+    keep: variation.keep,
+    seed: variation.seed,
+    sampling: variation.sampling,
+  };
+}
 
 export type TokenCount = {
   token_count: number;

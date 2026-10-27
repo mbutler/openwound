@@ -80,8 +80,11 @@ def _desk(project) -> dict:
     }
 
 
-def create_app(library: Library, token_counter=None) -> FastAPI:
+def create_app(library: Library, token_counter=None, live_engine=None) -> FastAPI:
+    from ncm_art.live.engine import LiveEngine
+
     application = FastAPI(title="Openwound", version=__version__)
+    engine = live_engine or LiveEngine()
 
     def count_tokens(text: str) -> dict:
         if token_counter is not None:
@@ -117,6 +120,7 @@ def create_app(library: Library, token_counter=None) -> FastAPI:
             "worker": worker_state(library),
             "worker_error": worker_error(library),
             "capabilities": read_capabilities(library),
+            "live": engine.state(),
             "model_profile": "tinystories-v1",
             "execution_profile": "cpu-fp32-eager-v1",
         }
@@ -303,9 +307,11 @@ def create_app(library: Library, token_counter=None) -> FastAPI:
     from ncm_art.api.comparisons import register as register_comparisons
     from ncm_art.api.corpus import register
     from ncm_art.api.exports import register as register_exports
+    from ncm_art.api.live import register as register_live
     from ncm_art.api.works import register as register_works
 
     register(application, library)
+    register_live(application, library, engine)
     register_works(application, library)
     register_exports(application, library)
     register_comparisons(application, library)
